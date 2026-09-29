@@ -11,12 +11,12 @@ details summary::-webkit-details-marker{display:none}
 
 /* brede schermen: inhoud gecentreerd op max. 1216px */
 @media (min-width:1441px){
-  .site>*{padding-left:calc((100vw - 1216px)/2)!important;padding-right:calc((100vw - 1216px)/2)!important}
+  .site>*,.site>main>*{padding-left:calc((100vw - 1216px)/2)!important;padding-right:calc((100vw - 1216px)/2)!important}
 }
 
 /* tablet */
 @media (max-width:1180px){
-  .site>*{padding-left:48px!important;padding-right:48px!important}
+  .site>*,.site>main>*{padding-left:48px!important;padding-right:48px!important}
   header nav{gap:22px!important}
   [style*="grid-template-columns: repeat(4"]{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   .keep4{grid-template-columns:repeat(4,minmax(0,1fr))!important}
@@ -24,8 +24,8 @@ details summary::-webkit-details-marker{display:none}
 
 /* mobiel */
 @media (max-width:860px){
-  .site>*{padding-left:22px!important;padding-right:22px!important}
-  .site>section{padding-top:64px!important;padding-bottom:64px!important}
+  .site>*,.site>main>*{padding-left:22px!important;padding-right:22px!important}
+  .site>section,.site>main>section{padding-top:64px!important;padding-bottom:64px!important}
   .bar{height:auto!important;padding-top:10px!important;padding-bottom:10px!important;font-size:14px!important}
   .bar>span:last-child{display:none}
   header{height:72px!important}
@@ -40,6 +40,7 @@ details summary::-webkit-details-marker{display:none}
   .site section[style*="justify-content: space-between"],
   .site div[style*="justify-content: space-between"]:not(.keeprow){flex-direction:column;align-items:flex-start!important}
 
+  h1,h2,h3{hyphens:auto;-webkit-hyphens:auto;overflow-wrap:anywhere}
   h1{font-size:44px!important;line-height:1.08!important;letter-spacing:-.6px!important}
   h2{font-size:34px!important;line-height:1.12!important;letter-spacing:-.4px!important}
   blockquote{font-size:23px!important}
@@ -50,7 +51,7 @@ details summary::-webkit-details-marker{display:none}
   [style*="font-size: 48px"],[style*="font-size: 40px"]{font-size:32px!important}
 
   form,[style*="padding: 64px"],[style*="padding: 56px"],[style*="padding: 48px"],[style*="padding: 44px"]{padding:28px 22px!important}
-  .site>*{padding-left:22px!important;padding-right:22px!important}
+  .site>*,.site>main>*{padding-left:22px!important;padding-right:22px!important}
   [style*="height: 620px"],[style*="height: 560px"]{height:400px!important;border-radius:180px 180px 14px 14px!important}
   [style*="padding-left: 48px"]{padding-left:22px!important}
   [style*="padding-bottom: 56px"]{padding-bottom:40px!important}
