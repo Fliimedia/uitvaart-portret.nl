@@ -64,3 +64,10 @@ details summary::-webkit-details-marker{display:none}
 .lp-chev{transition:transform .25s ease}
 .lp-fold[open] .lp-chev{transform:rotate(180deg)}
 .lp-fold summary::-webkit-details-marker{display:none}
+.flii-badge{align-self:center;margin-top:-24px;display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-size:13px;font-weight:500;letter-spacing:.2px;opacity:0;pointer-events:none;transition:opacity 1s ease}
+.flii-badge.is-on{opacity:1;pointer-events:auto;transition:opacity .5s ease}
+.flii-mark{display:block;width:17px;height:13px;background:linear-gradient(100deg,#E4024E 35%,#FAC2D4 50%,#E4024E 65%);background-size:250% 100%;-webkit-mask:url(flii-mark.png) center/contain no-repeat;mask:url(flii-mark.png) center/contain no-repeat}
+.flii-text{background:linear-gradient(100deg,#6F6A63 35%,#E9E3D8 50%,#6F6A63 65%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent}
+.flii-badge.is-on .flii-mark,.flii-badge.is-on .flii-text{animation:flii-shimmer 1.6s linear infinite}
+@keyframes flii-shimmer{from{background-position:100% 0}to{background-position:0% 0}}
+@media (prefers-reduced-motion:reduce){.flii-badge.is-on .flii-mark,.flii-badge.is-on .flii-text{animation:none}}
