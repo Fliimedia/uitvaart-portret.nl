@@ -71,3 +71,10 @@ details summary::-webkit-details-marker{display:none}
 .flii-badge.is-on .flii-mark,.flii-badge.is-on .flii-text{animation:flii-shimmer 1.6s linear infinite}
 @keyframes flii-shimmer{from{background-position:100% 0}to{background-position:0% 0}}
 @media (prefers-reduced-motion:reduce){.flii-badge.is-on .flii-mark,.flii-badge.is-on .flii-text{animation:none}}
+.lp-list{margin-top:20px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(5,auto);grid-auto-flow:column;column-gap:48px;row-gap:14px;font-size:15px;line-height:1.45}
+.lp-list a{color:#4A4F4C;text-decoration:none;padding-left:14px;border-left:1px solid #D9CFC1;transition:color .2s ease,border-color .2s ease}
+.lp-list a:hover{color:#25292A;border-left-color:#4B5A48}
+@media (max-width:860px){
+  .lp-list{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-auto-flow:row;row-gap:12px}
+  .vb-row>a{order:-1}
+}
