@@ -61,3 +61,6 @@ details summary::-webkit-details-marker{display:none}
 [style*="gap: 28px; margin-top: 12px"]{flex-wrap:wrap}
 [style*="gap: 28px; margin-top: 12px"]>span{white-space:nowrap}
 @media (max-width:860px){.logo-head{height:46px!important}}
+.lp-chev{transition:transform .25s ease}
+.lp-fold[open] .lp-chev{transform:rotate(180deg)}
+.lp-fold summary::-webkit-details-marker{display:none}
