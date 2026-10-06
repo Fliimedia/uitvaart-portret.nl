@@ -40,9 +40,8 @@ details summary::-webkit-details-marker{display:none}
   .site section[style*="justify-content: space-between"],
   .site div[style*="justify-content: space-between"]:not(.keeprow){flex-direction:column;align-items:flex-start!important}
 
-  h1,h2,h3{hyphens:auto;-webkit-hyphens:auto;overflow-wrap:anywhere}
-  h1{font-size:44px!important;line-height:1.08!important;letter-spacing:-.6px!important}
-  h2{font-size:34px!important;line-height:1.12!important;letter-spacing:-.4px!important}
+  h1{font-size:38px!important;line-height:1.1!important;letter-spacing:-.6px!important}
+  h2{font-size:30px!important;line-height:1.12!important;letter-spacing:-.4px!important}
   blockquote{font-size:23px!important}
   summary{font-size:21px!important}
   p{font-size:17px!important}
@@ -78,3 +77,5 @@ details summary::-webkit-details-marker{display:none}
   .lp-list{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-auto-flow:row;row-gap:12px}
   .vb-row>a{order:-1}
 }
+
+h1,h2,h3,summary{hyphens:manual;-webkit-hyphens:manual;overflow-wrap:normal;word-break:normal;text-wrap:balance}
