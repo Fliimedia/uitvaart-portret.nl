@@ -1,8 +1,12 @@
 // Daan maakt hiermee een persoonlijke uploadlink. Beveiligd met ADMIN_PASSWORD.
-const crypto = require('crypto');
-const { sign, fail } = require('./_lib');
+import crypto from 'crypto';
+import { sign, fail } from './_lib.js';
 
-module.exports = (req, res) => {
+export default function handler(req, res) {
+  return linkHandler(req, res);
+}
+
+const linkHandler = (req, res) => {
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
   const { wachtwoord, naam } = req.body || {};
   const ok = typeof wachtwoord === 'string' && process.env.ADMIN_PASSWORD &&

@@ -1,7 +1,7 @@
 // Maakt (of vindt) de klantmap met vier fasemappen in Drive en geeft ondertekende map-id's terug.
-const { ROOT_NAME, FASES, sign, check, googleToken, folder, fail } = require('./_lib');
+import { ROOT_NAME, FASES, sign, check, googleToken, folder, fail } from './_lib.js';
 
-module.exports = async (req, res) => {
+export default async (req, res) => {
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
   const { c, s } = req.body || {};
   if (!check(c, s)) return fail(res, 403, 'Ongeldige link');

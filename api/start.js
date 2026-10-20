@@ -1,7 +1,7 @@
 // Start een resumable upload naar Drive. De browser stuurt het bestand daarna zelf rechtstreeks naar Google.
-const { check, googleToken, fail } = require('./_lib');
+import { check, googleToken, fail } from './_lib.js';
 
-module.exports = async (req, res) => {
+export default async (req, res) => {
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
   const { c, s, folder, fsig, name, mime, size } = req.body || {};
   if (!check(c, s) || !check(c + ':' + folder, fsig)) return fail(res, 403, 'Ongeldige link');

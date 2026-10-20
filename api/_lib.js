@@ -1,5 +1,5 @@
 // Gedeelde helpers voor de uploadfuncties. Bestanden met _ worden door Vercel niet als functie gepubliceerd.
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 const ROOT_NAME = 'Uitvaart-portret uploads';
 const FASES = ['1 Jeugd', '2 Jong volwassen', '3 Gezin en werk', '4 Later'];
@@ -55,4 +55,4 @@ function fail(res, status, message) {
   res.status(status).json({ error: message });
 }
 
-module.exports = { ROOT_NAME, FASES, sign, check, googleToken, drive, folder, fail };
+export { ROOT_NAME, FASES, sign, check, googleToken, drive, folder, fail };
