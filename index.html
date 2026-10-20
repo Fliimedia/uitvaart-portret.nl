@@ -217,25 +217,26 @@
 <a href="mailto:info@uitvaart-portret.nl" style="display: inline-flex; align-items: center; height: 56px; padding: 0 26px; border-radius: 28px; border: 1px solid #8F978F; color: #EFE9DF; text-decoration: none; font-size: 16px; font-weight: 600">info@uitvaart-portret.nl</a>
 </div>
 </div>
-<form style="padding: 44px; border-radius: 24px; background: #FBF8F3; color: #25292A; display: flex; flex-direction: column; gap: 22px">
+<form class="aanvraag" style="padding: 44px; border-radius: 24px; background: #FBF8F3; color: #25292A; display: flex; flex-direction: column; gap: 22px">
 <div style="display: flex; flex-direction: column; gap: 8px">
 <label for="h-naam" style="font-size: 16px; font-weight: 600">Uw naam</label>
-<input id="h-naam" type="text" style="height: 54px; box-sizing: border-box; padding: 0 16px; border: 1px solid #CFC4B4; border-radius: 12px; background: #FFFFFF; font-size: 18px; color: #25292A">
+<input id="h-naam" name="naam" required autocomplete="name" type="text" style="height: 54px; box-sizing: border-box; padding: 0 16px; border: 1px solid #CFC4B4; border-radius: 12px; background: #FFFFFF; font-size: 18px; color: #25292A">
 </div>
 <div style="display: flex; flex-direction: column; gap: 8px">
 <label for="h-contact" style="font-size: 16px; font-weight: 600">Telefoon of e-mail</label>
-<input id="h-contact" type="text" style="height: 54px; box-sizing: border-box; padding: 0 16px; border: 1px solid #CFC4B4; border-radius: 12px; background: #FFFFFF; font-size: 18px; color: #25292A">
+<input id="h-contact" name="contact" required type="text" style="height: 54px; box-sizing: border-box; padding: 0 16px; border: 1px solid #CFC4B4; border-radius: 12px; background: #FFFFFF; font-size: 18px; color: #25292A">
 </div>
 <div style="display: flex; flex-direction: column; gap: 8px">
 <label for="h-datum" style="font-size: 16px; font-weight: 600">Datum van de uitvaart <span style="font-weight: 400; color: #4A4F4C">(optioneel)</span></label>
-<input id="h-datum" type="date" style="height: 54px; box-sizing: border-box; padding: 0 16px; border: 1px solid #CFC4B4; border-radius: 12px; background: #FFFFFF; font-size: 18px; color: #25292A">
+<input id="h-datum" name="datum" type="date" style="height: 54px; box-sizing: border-box; padding: 0 16px; border: 1px solid #CFC4B4; border-radius: 12px; background: #FFFFFF; font-size: 18px; color: #25292A">
 </div>
 <div style="display: flex; flex-direction: column; gap: 8px">
 <label for="h-bericht" style="font-size: 16px; font-weight: 600">Uw bericht <span style="font-weight: 400; color: #4A4F4C">(niet verplicht)</span></label>
-<textarea id="h-bericht" rows="4" style="box-sizing: border-box; padding: 14px 16px; border: 1px solid #CFC4B4; border-radius: 12px; background: #FFFFFF; font-size: 18px; color: #25292A; resize: vertical"></textarea>
+<textarea id="h-bericht" name="bericht" rows="4" style="box-sizing: border-box; padding: 14px 16px; border: 1px solid #CFC4B4; border-radius: 12px; background: #FFFFFF; font-size: 18px; color: #25292A; resize: vertical"></textarea>
 </div>
+<input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position: absolute; left: -9999px; width: 1px; height: 1px">
 <button type="submit" style="height: 58px; border: 0; border-radius: 29px; background: #4B5A48; color: #FFFFFF; font-family: inherit; font-size: 17px; font-weight: 600; cursor: pointer">Verstuur bericht</button>
-<p style="margin: 0; font-size: 15px; color: #4A4F4C; text-align: center">U ontvangt zo snel mogelijk een reactie.</p>
+<p class="form-msg" role="status" style="margin: 0; font-size: 15px; color: #4A4F4C; text-align: center">U ontvangt zo snel mogelijk een reactie.</p>
 </form>
 </section>
 
@@ -277,5 +278,6 @@
 </div>
 <script src="assets/video.js" defer></script>
 <script src="assets/flii.js" defer></script>
+<script src="assets/form.js" defer></script>
 </body>
 </html>
