@@ -27,6 +27,11 @@
   var txt = document.createElement('p');
   txt.style.cssText = 'margin:0;flex:1 1 280px';
   txt.textContent = 'Deze site gebruikt cookies van Google om te meten hoe bezoekers via advertenties hier komen. Gaat u daarmee akkoord?';
+  var more = document.createElement('a');
+  more.href = '/privacyverklaring.html';
+  more.textContent = 'Meer informatie';
+  more.style.cssText = 'color:#EFE9DF;margin-left:6px';
+  txt.appendChild(more);
 
   function btn(label, primary, choice) {
     var b = document.createElement('button');
