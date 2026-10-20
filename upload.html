@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Foto's aanleveren – Uitvaart portret</title>
+<link rel="icon" href="assets/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..500&amp;family=Instrument+Sans:wght@400;500;600&amp;display=swap">
+<style>
+  :root { --bg:#F3EEE6; --card:#FBF8F3; --line:#E2D9CC; --ink:#25292A; --muted:#4A4F4C; --green:#4B5A48; --gold:#B08A3E; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:'Instrument Sans','Helvetica Neue',sans-serif; font-size:17px; line-height:1.55; }
+  main { max-width:880px; margin:0 auto; padding:32px 16px 140px; }
+  header img { height:34px; }
+  h1, h2 { font-family:'Newsreader',Georgia,serif; font-weight:400; margin:0; }
+  h1 { font-size:clamp(32px,6vw,46px); line-height:1.1; margin:28px 0 12px; }
+  h2 { font-size:26px; }
+  .intro { color:var(--muted); margin:0 0 8px; }
+  ol.steps { color:var(--muted); padding-left:22px; margin:12px 0 28px; }
+  .fase { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:24px; margin-bottom:18px; transition:border-color .15s; }
+  .fase.drag { border-color:var(--green); border-style:dashed; }
+  .fase-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .fase-head p { margin:2px 0 0; color:var(--muted); font-size:15px; }
+  .add { display:inline-flex; align-items:center; height:46px; padding:0 22px; border-radius:23px; background:var(--green); color:#fff; font-weight:600; font-size:16px; cursor:pointer; }
+  .add input { display:none; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:10px; margin-top:16px; }
+  .grid:empty { display:none; }
+  .thumb { position:relative; aspect-ratio:1; border-radius:12px; overflow:hidden; background:#E9E4DA; border:3px solid transparent; }
+  .thumb.portret { border-color:var(--green); }
+  .thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .thumb .naam { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:8px; font-size:12px; text-align:center; word-break:break-all; color:var(--muted); }
+  .thumb button { position:absolute; border:0; cursor:pointer; font:inherit; }
+  .ster { top:6px; left:6px; width:34px; height:34px; border-radius:17px; background:rgba(255,255,255,.88); font-size:19px; line-height:34px; color:#9a9a9a; }
+  .ster[aria-pressed="true"] { color:var(--gold); background:#fff; }
+  .weg { top:6px; right:6px; width:30px; height:30px; border-radius:15px; background:rgba(37,41,42,.65); color:#fff; font-size:18px; line-height:30px; }
+  .port { left:6px; right:6px; bottom:6px; height:28px; border-radius:14px; background:rgba(255,255,255,.88); font-size:13px; font-weight:600; color:var(--muted); }
+  .thumb.portret .port { background:var(--green); color:#fff; }
+  .bar { position:fixed; left:0; right:0; bottom:0; background:var(--card); border-top:1px solid var(--line); padding:14px 16px; }
+  .bar-in { max-width:880px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:14px; }
+  .telling { font-size:15px; color:var(--muted); }
+  .telling strong { color:var(--ink); }
+  .send { height:52px; padding:0 28px; border-radius:26px; border:0; background:var(--ink); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+  .send:disabled { opacity:.4; cursor:default; }
+  .progress { height:10px; border-radius:5px; background:var(--line); overflow:hidden; margin:18px 0 8px; }
+  .progress div { height:100%; width:0; background:var(--green); transition:width .2s; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:28px; margin-top:24px; }
+  .hidden { display:none !important; }
+  .fout { color:#8A3B2E; }
+  @media (max-width:520px) { .fase { padding:18px; } .send { padding:0 20px; } }
+</style>
+</head>
+<body>
+<main>
+  <header><a href="/"><img src="assets/logo-horizontaal.png" alt="Uitvaart portret"></a></header>
+
+  <section id="ongeldig" class="box hidden">
+    <h2>Deze link werkt niet</h2>
+    <p>Gebruik de link uit de e-mail van Daan. Lukt het niet? Bel of app <a href="tel:+31618424858">06 18 42 48 58</a>.</p>
+  </section>
+
+  <div id="kiezen">
+    <h1>Foto's voor de film</h1>
+    <p class="intro">Dit kost ongeveer tien minuten. De precieze volgorde hoeft u niet te bepalen; dat doen wij.</p>
+    <ol class="steps">
+      <li>Zet de foto's in de periode waar ze bij horen.</li>
+      <li>Tik op de <strong>☆</strong> bij foto's die er zeker in moeten.</li>
+      <li>Kies één <strong>portretfoto</strong> voor het begin of einde van de film.</li>
+      <li>Tik onderaan op <strong>Verstuur</strong>.</li>
+    </ol>
+    <div id="fases"></div>
+    <p class="intro" style="font-size:15px">Papieren foto's? Fotografeer ze met uw telefoon bij daglicht, recht van boven en zonder flits.</p>
+  </div>
+
+  <section id="bezig" class="box hidden">
+    <h2>Bezig met versturen…</h2>
+    <p class="intro">Laat deze pagina open tot het klaar is.</p>
+    <div class="progress"><div id="balk"></div></div>
+    <p class="telling" id="voortgang"></p>
+  </section>
+
+  <section id="klaar" class="box hidden">
+    <h2>Dank u wel</h2>
+    <p>Alle foto's zijn goed aangekomen. Daan gaat ermee aan de slag en neemt contact met u op zodra het concept klaar is.</p>
+  </section>
+
+  <section id="mislukt" class="box hidden">
+    <h2>Een paar foto's zijn niet aangekomen</h2>
+    <p id="mislukt-tekst" class="fout"></p>
+    <button class="send" id="opnieuw">Opnieuw proberen</button>
+  </section>
+</main>
+
+<div class="bar" id="bar">
+  <div class="bar-in">
+    <span class="telling" id="telling"><strong>0</strong> foto's · 60 inbegrepen</span>
+    <button class="send" id="verstuur" disabled>Verstuur</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const FASES = [
+    ['Jeugd', 'Kindertijd en schooltijd'],
+    ['Jong volwassen', 'Studie, eerste baan, verliefd'],
+    ['Gezin en werk', 'Trouwen, kinderen, werk, vakanties'],
+    ['Later', 'De latere jaren, kleinkinderen, recente foto\'s'],
+  ];
+  const params = new URLSearchParams(location.search);
+  const c = params.get('c'), s = params.get('s');
+  const $ = id => document.getElementById(id);
+  if (!c || !s) { $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); return; }
+
+  let items = [], portretId = null, nextId = 1, busy = false, failed = [];
+
+  const extMime = n => /\.(heic|heif)$/i.test(n) ? 'image/heic' : /\.(jpe?g)$/i.test(n) ? 'image/jpeg' : /\.mov$/i.test(n) ? 'video/quicktime' : '';
+
+  // Vakken opbouwen
+  FASES.forEach(([titel, hint], f) => {
+    const sec = document.createElement('section');
+    sec.className = 'fase';
+    sec.innerHTML = `<div class="fase-head"><div><h2>${titel}</h2><p>${hint}</p></div>
+      <label class="add">+ Foto's toevoegen<input type="file" multiple accept="image/*,video/*"></label></div>
+      <div class="grid" id="grid${f}"></div>`;
+    sec.querySelector('input').addEventListener('change', e => { add(e.target.files, f); e.target.value = ''; });
+    sec.addEventListener('dragover', e => { e.preventDefault(); sec.classList.add('drag'); });
+    sec.addEventListener('dragleave', () => sec.classList.remove('drag'));
+    sec.addEventListener('drop', e => { e.preventDefault(); sec.classList.remove('drag'); add(e.dataTransfer.files, f); });
+    $('fases').appendChild(sec);
+  });
+
+  function add(files, fase) {
+    for (const file of files) {
+      const mime = file.type || extMime(file.name);
+      if (!/^(image|video)\//.test(mime)) continue;
+      items.push({ id: nextId++, file, mime, fase, star: false, url: URL.createObjectURL(file) });
+    }
+    render();
+  }
+
+  function render() {
+    for (let f = 0; f < 4; f++) {
+      const grid = $('grid' + f);
+      grid.innerHTML = '';
+      items.filter(i => i.fase === f).forEach(i => {
+        const d = document.createElement('div');
+        d.className = 'thumb' + (i.id === portretId ? ' portret' : '');
+        const media = i.mime.startsWith('image/')
+          ? `<img src="${i.url}" alt="" loading="lazy">`
+          : `<span class="naam">🎬</span>`;
+        d.innerHTML = media +
+          `<button class="ster" aria-pressed="${i.star}" aria-label="Moet erin">${i.star ? '★' : '☆'}</button>
+           <button class="weg" aria-label="Verwijderen">×</button>
+           <button class="port">${i.id === portretId ? 'Portret ✓' : 'Portret'}</button>`;
+        d.querySelector('.ster').onclick = () => { i.star = !i.star; render(); };
+        d.querySelector('.weg').onclick = () => { URL.revokeObjectURL(i.url); items = items.filter(x => x !== i); if (portretId === i.id) portretId = null; render(); };
+        d.querySelector('.port').onclick = () => { portretId = portretId === i.id ? null : i.id; render(); };
+        // Geen voorbeeld mogelijk (bijv. HEIC buiten Safari): toon de bestandsnaam.
+        const img = d.querySelector('img');
+        if (img) img.onerror = () => img.replaceWith(Object.assign(document.createElement('span'), { className: 'naam', textContent: i.file.name }));
+        grid.appendChild(d);
+      });
+    }
+    const n = items.length;
+    $('telling').innerHTML = `<strong>${n}</strong> ${n === 1 ? 'foto' : "foto's"} · 60 inbegrepen` + (n > 60 ? ` · ${n - 60} extra` : '');
+    $('verstuur').disabled = n === 0 || busy;
+  }
+
+  async function post(url, body) {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'Fout ' + r.status);
+    return j;
+  }
+
+  function put(url, job, onProgress) {
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open('PUT', url);
+      x.setRequestHeader('Content-Type', job.mime);
+      x.upload.onprogress = e => onProgress(e.loaded);
+      x.onload = () => (x.status >= 200 && x.status < 300 ? resolve() : reject(new Error('Status ' + x.status)));
+      x.onerror = () => reject(new Error('Netwerkfout'));
+      x.send(job.file);
+    });
+  }
+
+  let folders = null;
+  async function upload(jobs) {
+    busy = true; render();
+    $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden');
+    $('mislukt').classList.add('hidden'); $('bezig').classList.remove('hidden');
+    window.onbeforeunload = () => 'Het versturen is nog bezig.';
+    failed = [];
+    try {
+      if (!folders) folders = (await post('/api/prepare', { c, s })).folders;
+    } catch (e) {
+      failed = jobs; return finish(e.message);
+    }
+    const total = jobs.reduce((a, j) => a + j.file.size, 0);
+    const loaded = new Map(); let done = 0;
+    const show = () => {
+      const sum = [...loaded.values()].reduce((a, b) => a + b, 0);
+      $('balk').style.width = Math.min(100, (sum / total) * 100) + '%';
+      $('voortgang').textContent = `${done} van ${jobs.length} verstuurd`;
+    };
+    const queue = jobs.slice();
+    async function worker() {
+      while (queue.length) {
+        const job = queue.shift();
+        let ok = false;
+        for (let poging = 0; poging < 3 && !ok; poging++) {
+          try {
+            const f = folders[job.fase];
+            const { url } = await post('/api/start', { c, s, folder: f.id, fsig: f.sig, name: job.name, mime: job.mime, size: job.file.size });
+            await put(url, job, b => { loaded.set(job, b); show(); });
+            ok = true;
+          } catch (e) { loaded.set(job, 0); }
+        }
+        if (ok) { loaded.set(job, job.file.size); done++; } else failed.push(job);
+        show();
+      }
+    }
+    show();
+    await Promise.all([worker(), worker(), worker()]);
+    finish();
+  }
+
+  function finish(msg) {
+    busy = false; window.onbeforeunload = null;
+    $('bezig').classList.add('hidden');
+    if (!failed.length) { $('klaar').classList.remove('hidden'); return; }
+    $('mislukt-tekst').textContent = (msg ? msg + '. ' : '') + `${failed.length} ${failed.length === 1 ? 'bestand is' : 'bestanden zijn'} niet verstuurd. Controleer uw internetverbinding en probeer het opnieuw.`;
+    $('mislukt').classList.remove('hidden');
+  }
+
+  $('verstuur').onclick = () => {
+    if (!portretId && !confirm('U heeft nog geen portretfoto gekozen. Toch versturen?')) return;
+    const jobs = [];
+    for (let f = 0; f < 4; f++) {
+      items.filter(i => i.fase === f).forEach((i, n) => {
+        const tags = (i.star ? ' ★' : '') + (i.id === portretId ? ' PORTRET' : '');
+        jobs.push({ file: i.file, mime: i.mime, fase: f, name: String(n + 1).padStart(2, '0') + tags + ' - ' + i.file.name });
+      });
+    }
+    upload(jobs);
+  };
+  $('opnieuw').onclick = () => upload(failed.slice());
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Uploadlink maken</title>
+<link rel="icon" href="assets/favicon.png" type="image/png">
+<style>
+  body { margin:0; background:#F3EEE6; color:#25292A; font-family:'Helvetica Neue',sans-serif; font-size:17px; }
+  main { max-width:520px; margin:0 auto; padding:40px 16px; }
+  h1 { font-family:Georgia,serif; font-weight:400; font-size:32px; margin:0 0 20px; }
+  label { display:block; font-weight:600; margin:16px 0 6px; }
+  input { width:100%; box-sizing:border-box; height:48px; padding:0 14px; border:1px solid #CFC4B4; border-radius:12px; font:inherit; background:#FBF8F3; }
+  button { margin-top:20px; height:50px; padding:0 26px; border:0; border-radius:25px; background:#4B5A48; color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+  #uit { margin-top:28px; padding:18px; border-radius:14px; background:#FBF8F3; border:1px solid #E2D9CC; word-break:break-all; }
+  .fout { color:#8A3B2E; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Uploadlink maken</h1>
+  <form id="f">
+    <label for="naam">Naam van de klant of overledene</label>
+    <input id="naam" required placeholder="bijv. Jansen">
+    <label for="ww">Wachtwoord</label>
+    <input id="ww" type="password" required autocomplete="current-password">
+    <button>Maak link</button>
+  </form>
+  <div id="uit" hidden></div>
+</main>
+<script>
+document.getElementById('f').onsubmit = async e => {
+  e.preventDefault();
+  const uit = document.getElementById('uit');
+  uit.hidden = false; uit.textContent = 'Bezig…';
+  try {
+    const r = await fetch('/api/link', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ naam: naam.value, wachtwoord: ww.value }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+    uit.innerHTML = `<p>Map in Drive: <strong></strong></p><p><a target="_blank"></a></p><button type="button">Kopieer link</button>`;
+    uit.querySelector('strong').textContent = j.code;
+    const a = uit.querySelector('a'); a.href = a.textContent = j.link;
+    uit.querySelector('button').onclick = async ev => { await navigator.clipboard.writeText(j.link); ev.target.textContent = 'Gekopieerd ✓'; };
+  } catch (err) {
+    uit.innerHTML = '<p class="fout"></p>'; uit.querySelector('p').textContent = err.message || 'Er ging iets mis';
+  }
+};
+</script>
+</body>
+</html>
