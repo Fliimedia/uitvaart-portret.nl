@@ -1,6 +1,5 @@
-/* Leadformulier: verstuurt via Web3Forms en meet een Google Ads-conversie na een gelukte verzending. */
+/* Leadformulier: verstuurt via /api/aanvraag (Vercel + Resend) en meet een Google Ads-conversie na een gelukte verzending. */
 (function () {
-  var ACCESS_KEY = 'WEB3FORMS_KEY_HIER';
   var CONVERSION = 'AW-18526777996/_Q6pCIrooaMdEIzloIJF';
 
   document.querySelectorAll('form[data-leadform]').forEach(function (form) {
@@ -26,13 +25,10 @@
       btn.textContent = 'Bezig met versturen…';
       status.textContent = '';
 
-      var data = new FormData(form);
-      data.append('access_key', ACCESS_KEY);
-      data.append('subject', 'Nieuwe aanvraag via uitvaart-portret.nl');
-      data.append('from_name', 'uitvaart-portret.nl');
-      data.append('pagina', location.pathname);
+      var data = Object.fromEntries(new FormData(form));
+      data.pagina = location.pathname;
 
-      fetch('https://api.web3forms.com/submit', { method: 'POST', body: data, headers: { Accept: 'application/json' } })
+      fetch('/api/aanvraag', { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json', Accept: 'application/json' } })
         .then(function (r) { return r.json(); })
         .then(function (res) {
           if (!res.success) throw new Error(res.message || 'mislukt');
