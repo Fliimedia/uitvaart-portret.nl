@@ -80,5 +80,6 @@ details summary::-webkit-details-marker{display:none}
 
 h1,h2,h3,summary{hyphens:manual;-webkit-hyphens:manual;overflow-wrap:normal;word-break:normal;text-wrap:balance}
 
-.lp-folds{display:flex;flex-wrap:wrap;column-gap:40px;row-gap:16px;align-items:flex-start}
-.lp-folds .lp-fold[open]{flex-basis:100%}
+.lp-heads{display:flex;flex-wrap:wrap;column-gap:40px;row-gap:12px}
+.lp-list[hidden]{display:none}
+.lp-head[aria-expanded="true"] .lp-chev{transform:rotate(180deg)}
