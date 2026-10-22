@@ -1,6 +1,9 @@
-// Dagelijkse opruimtaak (Vercel Cron): verplaatst aangeleverde foto's 30 dagen na upload naar de prullenbak van Drive.
+// Dagelijkse taak (Vercel Cron):
+// 1. Vangnet: betalingen die de webhook gemist heeft alsnog verwerken (levering).
+// 2. Reviewverzoek 7 dagen na levering (als GOOGLE_REVIEW_URL is ingesteld en er een e-mailadres is).
+// 3. Aangeleverde foto's 30 dagen na upload, en de film 90 dagen na levering, naar de prullenbak van Drive.
 // De akkoordverklaring en het opdrachtenoverzicht blijven bewaard. Drive leegt de prullenbak zelf na 30 dagen.
-import { ROOT_NAME, FASES, googleToken, drive, folder, fail, logVeilig, nu } from './_lib.js';
+import { ROOT_NAME, FASES, googleToken, drive, folder, fail, logVeilig, nu, nuIso, leesOpdrachten, lever, mollie, mail, mailHtml, isMail, filmMap, logOpdracht } from './_lib.js';
 
 const DAGEN = 30;
 
@@ -26,6 +29,40 @@ export default async function handler(req, res) {
       await logVeilig(k.name, { Notities: `Foto's opgeruimd ${nu()}` });
     }
   }
-  console.log('Opgeruimd:', opgeruimd);
-  res.json({ ok: true, opgeruimd });
+  // --- Betalingen, reviews en films ---
+  const dagenGeleden = (iso) => (Date.now() - Date.parse(String(iso).replace(' ', 'T') + ':00+02:00')) / 864e5;
+  const gedaan = { geleverd: [], review: [], films: [] };
+  for (const o of await leesOpdrachten(t)) {
+    try {
+      if (o.Betaallink && !o.Betaald && process.env.MOLLIE_API_KEY) {
+        const pl = await mollie('payment-links/' + o.Betaallink);
+        if (pl.paidAt) { await lever(t, o); gedaan.geleverd.push(o.Code); continue; }
+      }
+      if (o.Geleverd && !o['Review gevraagd'] && process.env.GOOGLE_REVIEW_URL && isMail(o.Contact) && dagenGeleden(o.Geleverd) >= 7) {
+        const tekst = `Beste ${o.Naam || ''},
+
+Een week geleden ontving u de fotofilm. Ik hoop dat hij heeft bijgedragen aan een mooi afscheid.
+
+Zou u in een paar zinnen willen vertellen hoe u het samenwerken heeft ervaren? Dat helpt andere families die voor dezelfde keuze staan. Het kan hier:
+${process.env.GOOGLE_REVIEW_URL}
+
+Natuurlijk alleen als u daar ruimte voor heeft. Hoe dan ook: veel sterkte in deze periode.
+
+Met vriendelijke groet,
+Daan Lubbers
+uitvaart-portret.nl`;
+        await mail({ to: o.Contact.trim(), subject: 'Hoe heeft u het ervaren?', text: tekst, html: mailHtml(tekst) });
+        await logOpdracht(t, o.Code, { 'Review gevraagd': nuIso() });
+        gedaan.review.push(o.Code);
+      }
+      if (o.Geleverd && dagenGeleden(o.Geleverd) >= 90 && !/Film opgeruimd/.test(o.Notities)) {
+        const map = await filmMap(t, o.Code);
+        await drive(t, `files/${map}`, { method: 'PATCH', body: JSON.stringify({ trashed: true }) });
+        await logOpdracht(t, o.Code, { Notities: `${o.Notities ? o.Notities + '; ' : ''}Film opgeruimd ${nu()}` });
+        gedaan.films.push(o.Code);
+      }
+    } catch (e) { console.error('Dagtaak', o.Code, e); }
+  }
+  console.log('Opgeruimd:', opgeruimd, gedaan);
+  res.json({ ok: true, opgeruimd, ...gedaan });
 }

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Beheer – Uitvaart portret</title>
+<link rel="icon" href="assets/favicon.png" type="image/png">
+<style>
+  :root { --bg:#F3EEE6; --card:#FBF8F3; --line:#E2D9CC; --ink:#25292A; --muted:#4A4F4C; --green:#4B5A48; --red:#8A3B2E; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:'Helvetica Neue',Arial,sans-serif; font-size:16px; line-height:1.5; }
+  main { max-width:860px; margin:0 auto; padding:28px 16px 80px; }
+  h1 { font-family:Georgia,serif; font-weight:400; font-size:30px; margin:0 0 6px; }
+  .top { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+  .top a { color:var(--green); }
+  input, select { font:inherit; height:42px; padding:0 12px; border:1px solid #CFC4B4; border-radius:10px; background:#fff; }
+  button { font:inherit; height:42px; padding:0 18px; border:0; border-radius:21px; background:var(--green); color:#fff; font-weight:600; cursor:pointer; }
+  button.licht { background:#fff; color:var(--ink); border:1px solid #CFC4B4; }
+  button:disabled { opacity:.45; cursor:default; }
+  .kaart { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:20px; margin-bottom:16px; }
+  .kop { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .kop h2 { font-family:Georgia,serif; font-weight:400; font-size:22px; margin:0; }
+  .code { color:var(--muted); font-size:13px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 14px; }
+  .chip { font-size:13px; padding:3px 10px; border-radius:12px; background:#ECE6DB; color:var(--muted); }
+  .chip.ja { background:#DDE5DA; color:#2F3D2C; }
+  .rij { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:10px; }
+  .uit { margin-top:10px; font-size:14px; word-break:break-all; }
+  .uit.fout { color:var(--red); }
+  .balk { height:8px; border-radius:4px; background:var(--line); overflow:hidden; flex:1; min-width:120px; }
+  .balk div { height:100%; width:0; background:var(--green); }
+  details summary { cursor:pointer; color:var(--green); font-weight:600; margin-top:12px; }
+  label.kl { font-size:14px; color:var(--muted); display:flex; gap:6px; align-items:center; }
+  a.wa { display:inline-block; margin-top:6px; padding:8px 16px; border-radius:18px; background:#25D366; color:#fff; text-decoration:none; font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><div><h1>Beheer</h1><span class="code">Opdrachten, film, concept en betaling</span></div>
+    <a href="link.html">Losse uploadlink maken →</a></div>
+
+  <form id="login" class="kaart">
+    <label for="ww">Wachtwoord</label>
+    <div class="rij"><input id="ww" type="password" autocomplete="current-password" required style="flex:1"><button>Inloggen</button></div>
+    <div class="uit fout" id="loginfout"></div>
+  </form>
+  <div id="lijst"></div>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let ww = '';
+  try { ww = sessionStorage.getItem('beheer-ww') || ''; } catch (e) {}
+  const PRIJS = { Klassiek: 249, Modern: 299 };
+  const euro = (n) => '€' + n;
+
+  async function api(body) {
+    const r = await fetch('/api/beheer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wachtwoord: ww, ...body }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'Fout ' + r.status);
+    return j;
+  }
+  const el = (html) => { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstChild; };
+  const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function toonUit(box, res) {
+    box.className = 'uit';
+    let h = '';
+    if (res.link) h += `Link: <a href="${esc(res.link)}" target="_blank">${esc(res.link)}</a><br>`;
+    if (res.href) h += `Betaallink (${euro(res.totaal)}): <a href="${esc(res.href)}" target="_blank">${esc(res.href)}</a><br>`;
+    if (res.verstuurd === 'mail') h += '✓ Gemaild naar de klant.';
+    else if (res.wa) h += `Geen e-mailadres bekend. <a class="wa" href="${esc(res.wa)}" target="_blank">Verstuur via WhatsApp</a>`;
+    else if (res.tekst) h += 'Geen e-mailadres of 06-nummer bekend. Kopieer deze tekst:<pre style="white-space:pre-wrap">' + esc(res.tekst) + '</pre>';
+    box.innerHTML = h;
+  }
+  const toonFout = (box, e) => { box.className = 'uit fout'; box.textContent = e.message; };
+
+  function kaart(o) {
+    const extra = parseInt(o["Extra foto's (boven 60)"], 10) || 0;
+    const chip = (label, v) => `<span class="chip ${v ? 'ja' : ''}">${label}${v ? ': ' + esc(v) : ''}</span>`;
+    const k = el(`<div class="kaart">
+      <div class="kop"><div><h2>${esc(o.Naam || o.Code)}</h2><div class="code">${esc(o.Code)} · ${esc(o.Contact || 'geen contact')}${o['Datum uitvaart'] ? ' · uitvaart ' + esc(o['Datum uitvaart']) : ''}</div></div>
+        ${o['Drive-map'] ? `<a href="${esc(o['Drive-map'])}" target="_blank">Drive-map →</a>` : ''}</div>
+      <div class="chips">${chip('Upload', o['Upload ontvangen'])}${chip("Foto's", o["Aantal foto's"])}${chip('Akkoord', o['Akkoord voorwaarden'] && o['Akkoord voorwaarden'] !== 'NIET' ? 'ja' : '')}${chip('Concept', o.Concept)}${chip('Bedrag', o.Bedrag)}${chip('Betaald', o.Betaald)}${chip('Geleverd', o.Geleverd)}</div>
+      <div class="rij"><span><input type="file" accept="video/*" class="film" hidden><button type="button" class="licht kies">1. Film uploaden</button></span>
+        <div class="balk"><div></div></div></div>
+      <div class="rij"><button type="button" class="concept">2. Concept versturen</button></div>
+      <details><summary>3. Betaallink versturen</summary>
+        <div class="rij">
+          <select class="pakket"><option value="">Pakket…</option><option>Klassiek</option><option>Modern</option></select>
+          <select class="spoed"><option value="0">Geen spoed</option><option value="49">Spoed +€49</option><option value="99">Spoed +€99</option></select>
+          <label class="kl">Extra rondes <input type="number" class="rondes" min="0" value="0" style="width:64px"></label>
+          <label class="kl"><input type="checkbox" class="kort" style="height:auto"> Korte versie +€39</label>
+        </div>
+        <div class="rij"><span class="totaal code"></span><button type="button" class="betaal">Verstuur betaallink</button></div>
+      </details>
+      <div class="uit"></div>
+    </div>`);
+    const uit = k.querySelector('.uit');
+    const film = k.querySelector('.film');
+    k.querySelector('.kies').onclick = () => film.click();
+    film.onchange = async () => {
+      const f = film.files[0]; if (!f) return;
+      const balk = k.querySelector('.balk div');
+      try {
+        const { url } = await api({ actie: 'filmStart', code: o.Code, name: f.name, mime: f.type || 'video/mp4', size: f.size });
+        await new Promise((ok, nok) => {
+          const x = new XMLHttpRequest(); x.open('PUT', url); x.setRequestHeader('Content-Type', f.type || 'video/mp4');
+          x.upload.onprogress = (e) => { balk.style.width = (e.loaded / e.total * 100) + '%'; };
+          x.onload = () => (x.status < 300 ? ok() : nok(new Error('Upload mislukt (' + x.status + ')')));
+          x.onerror = () => nok(new Error('Netwerkfout bij upload')); x.send(f);
+        });
+        uit.className = 'uit'; uit.textContent = '✓ Film geüpload: ' + f.name + '. Nu kun je het concept versturen.';
+      } catch (e) { toonFout(uit, e); }
+    };
+    const totaalTekst = () => {
+      const p = k.querySelector('.pakket').value; if (!p) return '';
+      let t = PRIJS[p] + Math.ceil(extra / 5) * 10 + (+k.querySelector('.spoed').value) + 35 * (+k.querySelector('.rondes').value || 0) + (k.querySelector('.kort').checked ? 39 : 0);
+      return 'Totaal: ' + euro(t) + (extra ? ` (incl. ${Math.ceil(extra / 5) * 5} extra foto's)` : '');
+    };
+    k.querySelectorAll('select, input.rondes, input.kort').forEach((i) => i.oninput = i.onchange = () => { k.querySelector('.totaal').textContent = totaalTekst(); });
+    k.querySelector('.concept').onclick = async (ev) => {
+      if (!confirm('Concept naar ' + (o.Naam || o.Code) + ' versturen?')) return;
+      ev.target.disabled = true;
+      try { toonUit(uit, await api({ actie: 'concept', code: o.Code })); } catch (e) { toonFout(uit, e); }
+      ev.target.disabled = false;
+    };
+    k.querySelector('.betaal').onclick = async (ev) => {
+      const pakket = k.querySelector('.pakket').value;
+      if (!pakket) return toonFout(uit, new Error('Kies eerst een pakket'));
+      if (!confirm('Betaallink versturen? ' + totaalTekst())) return;
+      ev.target.disabled = true;
+      try { toonUit(uit, await api({ actie: 'betaal', code: o.Code, pakket, spoed: k.querySelector('.spoed').value,
+        extraRondes: k.querySelector('.rondes').value, korteVersie: k.querySelector('.kort').checked })); } catch (e) { toonFout(uit, e); }
+      ev.target.disabled = false;
+    };
+    return k;
+  }
+
+  async function laad() {
+    $('lijst').innerHTML = '<p class="code">Laden…</p>';
+    try {
+      const { lijst } = await api({ actie: 'lijst' });
+      $('login').hidden = true;
+      $('lijst').innerHTML = lijst.length ? '' : '<p class="code">Nog geen opdrachten.</p>';
+      lijst.forEach((o) => $('lijst').appendChild(kaart(o)));
+    } catch (e) {
+      $('lijst').innerHTML = ''; $('login').hidden = false; $('loginfout').textContent = e.message;
+    }
+  }
+  $('login').onsubmit = (e) => { e.preventDefault(); ww = $('ww').value; try { sessionStorage.setItem('beheer-ww', ww); } catch (er) {} laad(); };
+  if (ww) laad();
+})();
+</script>
+</body>
+</html>

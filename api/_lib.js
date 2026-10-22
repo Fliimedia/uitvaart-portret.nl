@@ -58,7 +58,8 @@ function fail(res, status, message) {
 // ---- Opdrachtenoverzicht (Google Sheet in de uploadmap) ----
 const SHEET_NAME = 'Opdrachtenoverzicht';
 const KOLOMMEN = ['Code', 'Naam', 'Contact', 'Datum uitvaart', 'Aanvraag', 'Uploadlink', 'Upload ontvangen',
-  "Aantal foto's", "Extra foto's (boven 60)", 'Akkoord voorwaarden', 'Drive-map', 'Concept', 'Betaald', 'Geleverd', 'Notities'];
+  "Aantal foto's", "Extra foto's (boven 60)", 'Akkoord voorwaarden', 'Drive-map', 'Concept', 'Betaald', 'Geleverd', 'Notities',
+  'Pakket', 'Bedrag', 'Betaallink', 'Film', 'Review gevraagd'];
 
 function nu() {
   return new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', dateStyle: 'short', timeStyle: 'short' });
@@ -77,7 +78,14 @@ async function overzicht(token) {
   const root = await folder(token, ROOT_NAME);
   const q = `name='${SHEET_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and '${root}' in parents`;
   const list = await drive(token, 'files?fields=files(id)&q=' + encodeURIComponent(q));
-  if (list.files.length) return list.files[0].id;
+  if (list.files.length) {
+    const id = list.files[0].id;
+    const kop = await sheets(token, `${id}/values/1:1`);
+    if (((kop.values || [[]])[0] || []).length < KOLOMMEN.length) {
+      await sheets(token, `${id}/values/A1?valueInputOption=RAW`, { method: 'PUT', body: JSON.stringify({ values: [KOLOMMEN] }) });
+    }
+    return id;
+  }
   const f = await drive(token, 'files?fields=id', { method: 'POST', body: JSON.stringify({
     name: SHEET_NAME, mimeType: 'application/vnd.google-apps.spreadsheet', parents: [root] }) });
   await sheets(token, `${f.id}/values/A1?valueInputOption=RAW`, { method: 'PUT', body: JSON.stringify({ values: [KOLOMMEN] }) });
@@ -104,4 +112,107 @@ async function logVeilig(code, velden) {
   try { await logOpdracht(await googleToken(), code, velden); } catch (e) { console.error('Opdrachtenoverzicht', e); }
 }
 
-export { ROOT_NAME, FASES, sign, check, googleToken, drive, folder, fail, nu, logOpdracht, logVeilig };
+// Alle opdrachten als objecten { Kolomnaam: waarde }.
+async function leesOpdrachten(token) {
+  const id = await overzicht(token);
+  const v = (await sheets(token, `${id}/values/A:Z`)).values || [];
+  const kop = v[0] || KOLOMMEN;
+  return v.slice(1).map((r) => Object.fromEntries(kop.map((k, i) => [k, r[i] || ''])));
+}
+
+// Datum als 'JJJJ-MM-DD UU:MM' (Nederlandse tijd), goed te sorteren en te rekenen.
+function nuIso() {
+  return new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Amsterdam' }).slice(0, 16);
+}
+
+// ---- Mail (Resend) ----
+async function mail({ to, subject, text, html, replyTo }) {
+  const { Resend } = await import('resend');
+  const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
+    from: 'Uitvaart portret <info@uitvaart-portret.nl>', to, subject, text, html, ...(replyTo ? { replyTo } : {}),
+  });
+  if (error) throw new Error('Resend: ' + JSON.stringify(error));
+}
+const isMail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).trim());
+function waNummer(contact) {
+  let d = String(contact).replace(/[^\d+]/g, '');
+  if (d.startsWith('+')) d = d.slice(1); else if (d.startsWith('00')) d = d.slice(2); else if (d.startsWith('0')) d = '31' + d.slice(1);
+  return /^\d{10,15}$/.test(d) ? d : '';
+}
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function mailHtml(tekst) {
+  return `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#25292A;max-width:560px">${
+    esc(tekst).replace(/(https:\/\/[^\s<]+)/g, '<a href="$1">$1</a>').replace(/\n/g, '<br>')}</div>`;
+}
+
+// ---- Film in Drive ----
+const FILMMAP = '5 Film';
+async function filmMap(token, code) {
+  const klant = await folder(token, code, await folder(token, ROOT_NAME));
+  return folder(token, FILMMAP, klant);
+}
+async function nieuwsteFilm(token, code) {
+  const map = await filmMap(token, code);
+  const q = `'${map}' in parents and mimeType contains 'video/' and trashed=false`;
+  const l = await drive(token, 'files?orderBy=createdTime desc&pageSize=1&fields=files(id,name,webViewLink)&q=' + encodeURIComponent(q));
+  return l.files[0] || null;
+}
+// Deelt de film via 'iedereen met de link'. download=false: alleen bekijken (concept).
+async function deel(token, fileId, download) {
+  await drive(token, `files/${fileId}/permissions`, { method: 'POST', body: JSON.stringify({ role: 'reader', type: 'anyone' }) });
+  await drive(token, `files/${fileId}?fields=id`, { method: 'PATCH', body: JSON.stringify({ copyRequiresWriterPermission: !download }) });
+  return (await drive(token, `files/${fileId}?fields=webViewLink`)).webViewLink;
+}
+
+// ---- Prijs en Mollie ----
+const PRIJS = { Klassiek: 249, Modern: 299 };
+function berekenBedrag({ pakket, spoed = 0, extraFotos = 0, extraRondes = 0, korteVersie = false }) {
+  const regels = [[`Fotofilm ${pakket}`, PRIJS[pakket] || 0]];
+  const blokken = Math.ceil(Math.max(0, extraFotos) / 5);
+  if (blokken) regels.push([`${blokken * 5} extra foto's`, blokken * 10]);
+  if (+spoed === 49 || +spoed === 99) regels.push(['Spoedtoeslag', +spoed]);
+  if (extraRondes > 0) regels.push([`${extraRondes} extra correctieronde(s)`, 35 * extraRondes]);
+  if (korteVersie) regels.push(['Korte versie om te delen', 39]);
+  return { regels, totaal: regels.reduce((a, [, b]) => a + b, 0) };
+}
+async function mollie(path, opts = {}) {
+  const r = await fetch('https://api.mollie.com/v2/' + path, {
+    ...opts, headers: { Authorization: 'Bearer ' + process.env.MOLLIE_API_KEY, 'Content-Type': 'application/json' },
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error('Mollie ' + r.status + ': ' + JSON.stringify(j));
+  return j;
+}
+
+// ---- Levering na betaling ----
+async function lever(token, order) {
+  const code = order.Code;
+  const film = await nieuwsteFilm(token, code);
+  if (!film) throw new Error('Geen film gevonden voor ' + code);
+  const link = await deel(token, film.id, true);
+  const naam = order.Naam || '';
+  const tekst = `Beste ${naam},
+
+Hartelijk dank voor uw betaling. Via deze link kunt u de film bekijken en downloaden:
+${link}
+
+Klik rechtsboven op het downloadicoon om het bestand op te slaan. Zet het voor de uitvaart ook op een usb-stick, dan heeft de uitvaartlocatie altijd een reserve.
+
+De link blijft 90 dagen werken. Bewaar de film dus op een eigen plek.
+
+Ik wens u veel sterkte bij het afscheid.
+
+Met vriendelijke groet,
+Daan Lubbers
+uitvaart-portret.nl`;
+  if (isMail(order.Contact)) await mail({ to: order.Contact.trim(), subject: 'Uw fotofilm staat klaar', text: tekst, html: mailHtml(tekst) });
+  await logOpdracht(token, code, { Betaald: nuIso(), Geleverd: nuIso(), Film: link });
+  const wa = waNummer(order.Contact);
+  const note = isMail(order.Contact) ? 'De downloadlink is automatisch gemaild.'
+    : `Geen e-mailadres bekend: stuur de link zelf via WhatsApp: https://wa.me/${wa}?text=${encodeURIComponent(tekst)}`;
+  await mail({ to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl', subject: `Betaald en geleverd: ${code}`,
+    text: `${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`, html: mailHtml(`${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`) });
+}
+
+export { ROOT_NAME, FASES, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
+  mail, mailHtml, isMail, waNummer, filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, lever };
