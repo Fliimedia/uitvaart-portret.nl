@@ -193,7 +193,7 @@
     $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden');
     $('mislukt').classList.add('hidden'); $('bezig').classList.remove('hidden');
     window.onbeforeunload = () => 'Het versturen is nog bezig.';
-    failed = [];
+    failed = []; const gelukt = [];
     try {
       if (!folders) folders = (await post('/api/prepare', { c, s })).folders;
     } catch (e) {
@@ -219,12 +219,19 @@
             ok = true;
           } catch (e) { loaded.set(job, 0); }
         }
-        if (ok) { loaded.set(job, job.file.size); done++; } else failed.push(job);
+        if (ok) { loaded.set(job, job.file.size); done++; gelukt.push(job); } else failed.push(job);
         show();
       }
     }
     show();
     await Promise.all([worker(), worker(), worker()]);
+    // Melding aan Daan (loopt door op de achtergrond; een fout hier raakt de klant niet).
+    if (gelukt.length) {
+      const perFase = [0, 0, 0, 0]; gelukt.forEach(j => perFase[j.fase]++);
+      fetch('/api/klaar', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ c, s, perFase, ster: gelukt.filter(j => j.name.includes('★')).length,
+          portret: gelukt.some(j => j.name.includes('PORTRET')), mislukt: failed.length }) }).catch(() => {});
+    }
     finish();
   }
 
