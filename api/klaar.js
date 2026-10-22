@@ -1,6 +1,6 @@
 // Stuurt Daan een mail zodra een familie foto's heeft verstuurd, met een link naar de Drive-map.
 import { Resend } from 'resend';
-import { ROOT_NAME, FASES, check, googleToken, folder, fail } from './_lib.js';
+import { ROOT_NAME, FASES, check, googleToken, folder, fail, nu, logVeilig } from './_lib.js';
 
 const FROM = 'Uitvaart portret <info@uitvaart-portret.nl>';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -46,6 +46,9 @@ export default async function handler(req, res) {
   } catch (e) {
     console.error('Drive-map of akkoordbestand mislukt', e);
   }
+
+  await logVeilig(c, { 'Upload ontvangen': nu(), "Aantal foto's": totaal, "Extra foto's (boven 60)": Math.max(0, totaal - 60),
+    'Akkoord voorwaarden': akkoord || 'NIET', 'Drive-map': map });
 
   const rows = [
     ['Klant', c],

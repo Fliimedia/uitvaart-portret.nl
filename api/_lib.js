@@ -55,4 +55,53 @@ function fail(res, status, message) {
   res.status(status).json({ error: message });
 }
 
-export { ROOT_NAME, FASES, sign, check, googleToken, drive, folder, fail };
+// ---- Opdrachtenoverzicht (Google Sheet in de uploadmap) ----
+const SHEET_NAME = 'Opdrachtenoverzicht';
+const KOLOMMEN = ['Code', 'Naam', 'Contact', 'Datum uitvaart', 'Aanvraag', 'Uploadlink', 'Upload ontvangen',
+  "Aantal foto's", "Extra foto's (boven 60)", 'Akkoord voorwaarden', 'Drive-map', 'Concept', 'Betaald', 'Geleverd', 'Notities'];
+
+function nu() {
+  return new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', dateStyle: 'short', timeStyle: 'short' });
+}
+
+async function sheets(token, path, opts = {}) {
+  const r = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + path, {
+    ...opts,
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+  });
+  if (!r.ok) throw new Error('Sheets ' + r.status + ': ' + (await r.text()));
+  return r.json();
+}
+
+async function overzicht(token) {
+  const root = await folder(token, ROOT_NAME);
+  const q = `name='${SHEET_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and '${root}' in parents`;
+  const list = await drive(token, 'files?fields=files(id)&q=' + encodeURIComponent(q));
+  if (list.files.length) return list.files[0].id;
+  const f = await drive(token, 'files?fields=id', { method: 'POST', body: JSON.stringify({
+    name: SHEET_NAME, mimeType: 'application/vnd.google-apps.spreadsheet', parents: [root] }) });
+  await sheets(token, `${f.id}/values/A1?valueInputOption=RAW`, { method: 'PUT', body: JSON.stringify({ values: [KOLOMMEN] }) });
+  return f.id;
+}
+
+// Werkt de regel van een opdracht bij (of maakt hem aan). velden: { 'Kolomnaam': waarde }. Lege kolommen blijven ongemoeid.
+async function logOpdracht(token, code, velden) {
+  const id = await overzicht(token);
+  const col = await sheets(token, `${id}/values/A:A`);
+  const codes = (col.values || []).map((r) => r[0]);
+  const rij = KOLOMMEN.map((k) => (k === 'Code' ? code : (k in velden ? String(velden[k]) : null)));
+  const idx = codes.indexOf(code);
+  if (idx >= 1) {
+    await sheets(token, `${id}/values/A${idx + 1}?valueInputOption=RAW`, { method: 'PUT', body: JSON.stringify({ values: [rij] }) });
+  } else {
+    await sheets(token, `${id}/values/A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
+      method: 'POST', body: JSON.stringify({ values: [rij.map((v) => (v === null ? '' : v))] }) });
+  }
+}
+
+// Nooit de hoofdtaak laten mislukken door het overzicht.
+async function logVeilig(code, velden) {
+  try { await logOpdracht(await googleToken(), code, velden); } catch (e) { console.error('Opdrachtenoverzicht', e); }
+}
+
+export { ROOT_NAME, FASES, sign, check, googleToken, drive, folder, fail, nu, logOpdracht, logVeilig };

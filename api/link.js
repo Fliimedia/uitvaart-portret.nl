@@ -1,12 +1,12 @@
 // Daan maakt hiermee een persoonlijke uploadlink. Beveiligd met ADMIN_PASSWORD.
 import crypto from 'crypto';
-import { sign, fail } from './_lib.js';
+import { sign, fail, nu, logVeilig } from './_lib.js';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   return linkHandler(req, res);
 }
 
-const linkHandler = (req, res) => {
+const linkHandler = async (req, res) => {
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
   const { wachtwoord, naam } = req.body || {};
   const ok = typeof wachtwoord === 'string' && process.env.ADMIN_PASSWORD &&
@@ -18,5 +18,6 @@ const linkHandler = (req, res) => {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'klant';
   const code = slug + '-' + crypto.randomBytes(4).toString('hex');
   const link = `https://${req.headers.host}/upload.html?c=${encodeURIComponent(code)}&s=${sign(code)}`;
+  await logVeilig(code, { Naam: String(naam || ''), Aanvraag: nu() + ' (link handmatig)', Uploadlink: link });
   res.json({ code, link });
 };

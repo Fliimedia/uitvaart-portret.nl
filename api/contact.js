@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 import crypto from 'crypto';
-import { sign } from './_lib.js';
+import { sign, nu, logVeilig } from './_lib.js';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = 'Uitvaart portret <info@uitvaart-portret.nl>';
@@ -13,7 +13,7 @@ function uploadLink(naam) {
   const slug = String(naam || 'klant').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'klant';
   const code = slug + '-' + crypto.randomBytes(4).toString('hex');
-  return `https://uitvaart-portret.nl/upload.html?c=${encodeURIComponent(code)}&s=${sign(code)}`;
+  return { code, link: `https://uitvaart-portret.nl/upload.html?c=${encodeURIComponent(code)}&s=${sign(code)}` };
 }
 
 // Kant-en-klaar antwoord voor Daan; hij leest het na en verstuurt het zelf.
@@ -67,7 +67,8 @@ export default async function handler(req, res) {
   if (!naam || !contact) return res.status(400).json({ ok: false, error: 'Vul uw naam en telefoon of e-mail in.' });
 
   const isMail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
-  const link = uploadLink(naam);
+  const { code, link } = uploadLink(naam);
+  await logVeilig(code, { Naam: naam, Contact: contact, 'Datum uitvaart': datum, Aanvraag: nu(), Uploadlink: link });
   const reply = antwoord(naam, /^\d{4}-\d{2}-\d{2}$/.test(datum) ? datum : '', link);
   const wa = isMail ? '' : waNummer(contact);
   const knop = (href, label) => `<a href="${href}" style="display:inline-block;margin:0 8px 8px 0;padding:10px 18px;border-radius:20px;background:#4B5A48;color:#fff;text-decoration:none;font-family:Arial,sans-serif;font-size:15px">${label}</a>`;
