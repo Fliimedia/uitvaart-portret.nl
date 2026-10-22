@@ -47,6 +47,9 @@
   .progress { height:10px; border-radius:5px; background:var(--line); overflow:hidden; margin:18px 0 8px; }
   .progress div { height:100%; width:0; background:var(--green); transition:width .2s; }
   .box { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:28px; margin-top:24px; }
+  .akkoord { display:flex; gap:12px; align-items:flex-start; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; margin:8px 0 0; font-size:16px; cursor:pointer; }
+  .akkoord input { width:22px; height:22px; margin:2px 0 0; flex-shrink:0; accent-color:var(--green); }
+  .akkoord a { color:var(--green); }
   .hidden { display:none !important; }
   .fout { color:#8A3B2E; }
   @media (max-width:520px) { .fase { padding:18px; } .send { padding:0 20px; } }
@@ -72,6 +75,7 @@
     </ol>
     <div id="fases"></div>
     <p class="intro" style="font-size:15px">Papieren foto's? Fotografeer ze met uw telefoon bij daglicht, recht van boven en zonder flits.</p>
+    <label class="akkoord"><input type="checkbox" id="akkoord"> <span>Ik ga akkoord met de <a href="algemene-voorwaarden.html" target="_blank">algemene voorwaarden</a> en wil dat Daan direct begint. Ik begrijp dat mijn herroepingsrecht vervalt zodra de film is geleverd.</span></label>
   </div>
 
   <section id="bezig" class="box hidden">
@@ -113,7 +117,7 @@
   const $ = id => document.getElementById(id);
   if (!c || !s) { $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); return; }
 
-  let items = [], portretId = null, nextId = 1, busy = false, failed = [];
+  let akkoordTijd = null, items = [], portretId = null, nextId = 1, busy = false, failed = [];
 
   const extMime = n => /\.(heic|heif)$/i.test(n) ? 'image/heic' : /\.(jpe?g)$/i.test(n) ? 'image/jpeg' : /\.mov$/i.test(n) ? 'video/quicktime' : '';
 
@@ -165,7 +169,8 @@
     }
     const n = items.length;
     $('telling').innerHTML = `<strong>${n}</strong> ${n === 1 ? 'foto' : "foto's"} · 60 inbegrepen` + (n > 60 ? ` · ${n - 60} extra` : '');
-    $('verstuur').disabled = n === 0 || busy;
+    $('verstuur').disabled = n === 0 || busy || !$('akkoord').checked;
+    if (n > 0 && !$('akkoord').checked) $('telling').innerHTML += ' · <span style="color:#8A3B2E">vink onderaan het akkoord aan</span>';
   }
 
   async function post(url, body) {
@@ -230,7 +235,7 @@
       const perFase = [0, 0, 0, 0]; gelukt.forEach(j => perFase[j.fase]++);
       fetch('/api/klaar', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ c, s, perFase, ster: gelukt.filter(j => j.name.includes('★')).length,
-          portret: gelukt.some(j => j.name.includes('PORTRET')), mislukt: failed.length }) }).catch(() => {});
+          portret: gelukt.some(j => j.name.includes('PORTRET')), mislukt: failed.length, akkoord: akkoordTijd }) }).catch(() => {});
     }
     finish();
   }
@@ -254,6 +259,7 @@
     }
     upload(jobs);
   };
+  $('akkoord').onchange = () => { akkoordTijd = $('akkoord').checked ? new Date().toISOString() : null; render(); };
   $('opnieuw').onclick = () => upload(failed.slice());
   render();
 })();

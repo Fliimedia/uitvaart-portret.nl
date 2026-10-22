@@ -5,6 +5,21 @@ import { ROOT_NAME, FASES, check, googleToken, folder, fail } from './_lib.js';
 const FROM = 'Uitvaart portret <info@uitvaart-portret.nl>';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// Legt het akkoord vast als tekstbestand in de klantmap (bewijs naast de e-mail).
+async function bewijs(token, folderId, code, wanneer) {
+  const tekst = `Klant/opdracht: ${code}\nAkkoord gegeven op: ${wanneer}\n\nAangevinkt op de uploadpagina:\n"Ik ga akkoord met de algemene voorwaarden en wil dat Daan direct begint. Ik begrijp dat mijn herroepingsrecht vervalt zodra de film is geleverd."\n`;
+  const grens = 'akkoord' + Date.now();
+  const body = `--${grens}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+    JSON.stringify({ name: 'AKKOORD voorwaarden.txt', parents: [folderId] }) +
+    `\r\n--${grens}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${tekst}\r\n--${grens}--`;
+  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + grens },
+    body,
+  });
+  if (!r.ok) throw new Error('Akkoordbestand ' + r.status + ': ' + (await r.text()));
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
   const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
@@ -16,13 +31,20 @@ export default async function handler(req, res) {
   const ster = Math.max(0, parseInt(b.ster, 10) || 0);
   const mislukt = Math.max(0, parseInt(b.mislukt, 10) || 0);
 
+  // Tijdstip van akkoord (vinkje op de uploadpagina), weergegeven in Nederlandse tijd.
+  const t0 = Date.parse(b.akkoord);
+  const akkoord = Number.isFinite(t0)
+    ? new Date(t0).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', dateStyle: 'long', timeStyle: 'short' })
+    : '';
+
   let map = '';
   try {
     const t = await googleToken();
     const id = await folder(t, c, await folder(t, ROOT_NAME));
     map = 'https://drive.google.com/drive/folders/' + id;
+    if (akkoord) await bewijs(t, id, c, akkoord);
   } catch (e) {
-    console.error('Drive-map niet gevonden', e);
+    console.error('Drive-map of akkoordbestand mislukt', e);
   }
 
   const rows = [
@@ -31,6 +53,7 @@ export default async function handler(req, res) {
     ...FASES.map((f, i) => [f.replace(/^\d /, ''), String(perFase[i] || 0)]),
     ['Met ster', String(ster)],
     ['Portretfoto', b.portret ? 'ja' : 'nee'],
+    ['Akkoord voorwaarden', akkoord ? `ja, ${akkoord}` : 'NIET ontvangen'],
     ...(mislukt ? [['Niet aangekomen', `${mislukt} (familie kan opnieuw proberen)`]] : []),
   ];
   const text = rows.map(([k, v]) => `${k}: ${v}`).join('\n') + (map ? `\n\nOpen de map: ${map}` : '');
