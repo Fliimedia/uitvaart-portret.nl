@@ -49,6 +49,17 @@
   actions.appendChild(btn('Weigeren', false, 'denied'));
   actions.appendChild(btn('Akkoord', true, 'granted'));
 
+  // Mobiel: compacte balk, zodat de belknop in beeld blijft.
+  if (window.matchMedia && window.matchMedia('(max-width: 600px)').matches) {
+    bar.style.left = '8px'; bar.style.right = '8px'; bar.style.bottom = '8px';
+    bar.style.padding = '10px 12px'; bar.style.gap = '8px'; bar.style.fontSize = '13px'; bar.style.borderRadius = '12px';
+    bar.style.flexWrap = 'nowrap';
+    txt.style.flex = '1 1 auto';
+    txt.firstChild.nodeValue = 'Cookies voor advertentiemeting?';
+    more.textContent = 'Info';
+    Array.prototype.forEach.call(actions.children, function (b) { b.style.height = '34px'; b.style.padding = '0 12px'; b.style.fontSize = '13px'; });
+    actions.style.gap = '6px'; actions.style.flexShrink = '0';
+  }
   bar.appendChild(txt);
   bar.appendChild(actions);
   document.body.appendChild(bar);
