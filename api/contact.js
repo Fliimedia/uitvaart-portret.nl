@@ -24,7 +24,7 @@ function antwoord(naam, datum, link) {
     ? ` op ${new Date(datum + 'T12:00:00Z').toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`
     : '';
   const spoed = dagen !== null && dagen <= 1
-    ? '\nOmdat de uitvaart al snel is, komt er een spoedtoeslag bij: €49 als de foto’s 24 tot 48 uur voor de dienst binnen zijn, €99 bij minder dan 24 uur.\n'
+    ? '\nOmdat de uitvaart al snel is: ontvangen we de foto’s minstens 24 uur voor de dienst, dan is er geen meerprijs. Bij minder dan 24 uur komt er een spoedtoeslag van €99 bij.\n'
     : '';
   return `Beste ${naam},
 
