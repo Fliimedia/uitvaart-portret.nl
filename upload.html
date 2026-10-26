@@ -38,6 +38,13 @@
   .weg { top:6px; right:6px; width:30px; height:30px; border-radius:15px; background:rgba(37,41,42,.65); color:#fff; font-size:18px; line-height:30px; }
   .port { left:6px; right:6px; bottom:6px; height:28px; border-radius:14px; background:rgba(255,255,255,.88); font-size:13px; font-weight:600; color:var(--muted); }
   .thumb.portret .port { background:var(--green); color:#fff; }
+  .nummer { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .nummer input { height:48px; box-sizing:border-box; padding:0 14px; border:1px solid var(--line); border-radius:12px; font:inherit; font-size:16px; background:#fff; color:var(--ink); min-width:0; }
+  .muziek-acties { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+  .add.licht { background:transparent; color:var(--green); border:1px solid var(--green); }
+  #muziek-bestanden { margin:10px 0 0; font-size:15px; color:var(--muted); }
+  #muziek-bestanden button { border:0; background:none; color:#8A3B2E; cursor:pointer; font:inherit; }
+  @media (max-width:520px) { .nummer { grid-template-columns:1fr; } }
   .bar { position:fixed; left:0; right:0; bottom:0; background:var(--card); border-top:1px solid var(--line); padding:14px 16px; }
   .bar-in { max-width:880px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:14px; }
   .telling { font-size:15px; color:var(--muted); }
@@ -71,9 +78,19 @@
       <li>Zet de foto's in de periode waar ze bij horen.</li>
       <li>Tik op de <strong>☆</strong> bij foto's die er zeker in moeten.</li>
       <li>Kies één <strong>portretfoto</strong> voor het begin of einde van de film.</li>
+      <li>Vul onderaan de <strong>muziek</strong> in.</li>
       <li>Tik onderaan op <strong>Verstuur</strong>.</li>
     </ol>
     <div id="fases"></div>
+    <section class="fase" id="muziek">
+      <div class="fase-head"><div><h2>Muziek</h2><p>Welk nummer moet onder de film? Noem de titel en de artiest. Gaat het om een bepaalde uitvoering (live, een koor, een eigen opname), plak dan de link of voeg het bestand toe.</p></div></div>
+      <div id="nummers"></div>
+      <div class="muziek-acties">
+        <button type="button" class="add licht" id="nummer-plus">+ Nog een nummer</button>
+        <label class="add licht">+ Muziekbestand toevoegen<input type="file" id="muziek-file" multiple accept="audio/*,.mp3,.m4a,.wav,.aac,.flac"></label>
+      </div>
+      <p id="muziek-bestanden"></p>
+    </section>
     <p class="intro" style="font-size:15px">Papieren foto's? Fotografeer ze met uw telefoon bij daglicht, recht van boven en zonder flits.</p>
     <label class="akkoord"><input type="checkbox" id="akkoord"> <span>Ik ga akkoord met de <a href="algemene-voorwaarden.html" target="_blank">algemene voorwaarden</a> en wil dat Daan direct begint. Ik begrijp dat mijn herroepingsrecht vervalt zodra de film is geleverd.</span></label>
   </div>
@@ -144,6 +161,28 @@
     render();
   }
 
+  // --- Muziek ---
+  let nummers = [{ titel: '', link: '' }], muziekFiles = [];
+  function tekenNummers() {
+    const box = $('nummers'); box.innerHTML = '';
+    nummers.forEach((m, k) => {
+      const d = document.createElement('div'); d.className = 'nummer';
+      d.innerHTML = `<input type="text" placeholder="${k === 0 ? 'Bijv. Bridge over troubled water – Simon & Garfunkel' : 'Titel en artiest'}" aria-label="Titel en artiest">
+        <input type="url" inputmode="url" placeholder="Link naar de juiste uitvoering (optioneel)" aria-label="Link naar de uitvoering">`;
+      const [a, b] = d.querySelectorAll('input');
+      a.value = m.titel; b.value = m.link;
+      a.oninput = () => { m.titel = a.value; render(); };
+      b.oninput = () => { m.link = b.value; render(); };
+      box.appendChild(d);
+    });
+    $('muziek-bestanden').innerHTML = muziekFiles.map((f, k) => `🎵 ${f.name.replace(/[<>&]/g, '')} <button type="button" data-k="${k}" aria-label="Verwijderen">×</button>`).join('<br>');
+    $('muziek-bestanden').querySelectorAll('button').forEach(btn => btn.onclick = () => { muziekFiles.splice(+btn.dataset.k, 1); tekenNummers(); render(); });
+  }
+  function muziekOk() { return muziekFiles.length > 0 || nummers.some(m => m.titel.trim().length > 1); }
+  $('nummer-plus').onclick = () => { if (nummers.length < 5) { nummers.push({ titel: '', link: '' }); tekenNummers(); } };
+  $('muziek-file').onchange = (e) => { muziekFiles.push(...[...e.target.files].slice(0, 5)); e.target.value = ''; tekenNummers(); render(); };
+  tekenNummers();
+
   function render() {
     for (let f = 0; f < 4; f++) {
       const grid = $('grid' + f);
@@ -169,7 +208,9 @@
     }
     const n = items.length;
     $('telling').innerHTML = `<strong>${n}</strong> ${n === 1 ? 'foto' : "foto's"} · 60 inbegrepen` + (n > 60 ? ` · ${n - 60} extra` : '');
-    $('verstuur').disabled = n === 0 || busy || !$('akkoord').checked;
+    const mOk = muziekOk();
+    $('verstuur').disabled = n === 0 || busy || !$('akkoord').checked || !mOk;
+    if (n > 0 && !mOk) $('telling').innerHTML += ' · <span style="color:#8A3B2E">vul de muziek in</span>';
     if (n > 0 && !$('akkoord').checked) $('telling').innerHTML += ' · <span style="color:#8A3B2E">vink onderaan het akkoord aan</span>';
   }
 
@@ -232,10 +273,11 @@
     await Promise.all([worker(), worker(), worker()]);
     // Melding aan Daan (loopt door op de achtergrond; een fout hier raakt de klant niet).
     if (gelukt.length) {
-      const perFase = [0, 0, 0, 0]; gelukt.forEach(j => perFase[j.fase]++);
+      const perFase = [0, 0, 0, 0]; gelukt.filter(j => !j.audio).forEach(j => perFase[j.fase]++);
       fetch('/api/klaar', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ c, s, perFase, ster: gelukt.filter(j => j.name.includes('★')).length,
-          portret: gelukt.some(j => j.name.includes('PORTRET')), mislukt: failed.length, akkoord: akkoordTijd }) }).catch(() => {});
+          portret: gelukt.some(j => j.name.includes('PORTRET')), mislukt: failed.length, akkoord: akkoordTijd,
+          muziek: nummers.filter(m => m.titel.trim() || m.link.trim()), muziekBestanden: gelukt.filter(j => j.audio).map(j => j.file.name) }) }).catch(() => {});
     }
     finish();
   }
@@ -257,6 +299,7 @@
         jobs.push({ file: i.file, mime: i.mime, fase: f, name: String(n + 1).padStart(2, '0') + tags + ' - ' + i.file.name });
       });
     }
+    muziekFiles.forEach((file, k) => jobs.push({ file, mime: file.type || 'audio/mpeg', fase: 0, audio: true, name: 'MUZIEK ' + (k + 1) + ' - ' + file.name }));
     upload(jobs);
   };
   $('akkoord').onchange = () => { akkoordTijd = $('akkoord').checked ? new Date().toISOString() : null; render(); };

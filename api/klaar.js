@@ -20,6 +20,18 @@ async function bewijs(token, folderId, code, wanneer) {
   if (!r.ok) throw new Error('Akkoordbestand ' + r.status + ': ' + (await r.text()));
 }
 
+// Schrijft een tekstbestand in de klantmap.
+async function tekstbestand(token, folderId, naam, tekst) {
+  const grens = 'txt' + Date.now();
+  const body = `--${grens}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+    JSON.stringify({ name: naam, parents: [folderId] }) +
+    `\r\n--${grens}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${tekst}\r\n--${grens}--`;
+  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + grens }, body,
+  });
+  if (!r.ok) throw new Error(naam + ' ' + r.status + ': ' + (await r.text()));
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
   const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
@@ -30,6 +42,16 @@ export default async function handler(req, res) {
   const totaal = perFase.reduce((a, n) => a + n, 0);
   const ster = Math.max(0, parseInt(b.ster, 10) || 0);
   const mislukt = Math.max(0, parseInt(b.mislukt, 10) || 0);
+
+  // Muziek: titel/artiest + optionele link, en eventuele meegestuurde bestanden.
+  const kort = (v, n) => String(v || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
+  const muziek = (Array.isArray(b.muziek) ? b.muziek : []).slice(0, 5)
+    .map((m) => ({ titel: kort(m && m.titel, 200), link: kort(m && m.link, 500) }))
+    .filter((m) => m.titel || m.link);
+  const muziekBestanden = (Array.isArray(b.muziekBestanden) ? b.muziekBestanden : []).slice(0, 5).map((n) => kort(n, 150));
+  const muziekRegels = muziek.map((m, i) => `${i + 1}. ${m.titel || '(geen titel)'}${m.link ? ' — ' + m.link : ''}`)
+    .concat(muziekBestanden.map((n) => 'Bestand: ' + n));
+  const muziekTekst = muziekRegels.length ? muziekRegels.join('\n') : 'NIET opgegeven';
 
   // Tijdstip van akkoord (vinkje op de uploadpagina), weergegeven in Nederlandse tijd.
   const t0 = Date.parse(b.akkoord);
@@ -43,12 +65,13 @@ export default async function handler(req, res) {
     const id = await folder(t, c, await folder(t, ROOT_NAME));
     map = 'https://drive.google.com/drive/folders/' + id;
     if (akkoord) await bewijs(t, id, c, akkoord);
+    await tekstbestand(t, id, 'MUZIEK.txt', `Klant/opdracht: ${c}\n\nMuziek:\n${muziekTekst}\n`);
   } catch (e) {
     console.error('Drive-map of akkoordbestand mislukt', e);
   }
 
   await logVeilig(c, { 'Upload ontvangen': nu(), "Aantal foto's": totaal, "Extra foto's (boven 60)": Math.max(0, totaal - 60),
-    'Akkoord voorwaarden': akkoord || 'NIET', 'Drive-map': map });
+    'Akkoord voorwaarden': akkoord || 'NIET', 'Drive-map': map, Muziek: muziekRegels.join(' | ') || 'NIET' });
 
   const rows = [
     ['Klant', c],
@@ -56,12 +79,13 @@ export default async function handler(req, res) {
     ...FASES.map((f, i) => [f.replace(/^\d /, ''), String(perFase[i] || 0)]),
     ['Met ster', String(ster)],
     ['Portretfoto', b.portret ? 'ja' : 'nee'],
+    ['Muziek', muziekTekst],
     ['Akkoord voorwaarden', akkoord ? `ja, ${akkoord}` : 'NIET ontvangen'],
     ...(mislukt ? [['Niet aangekomen', `${mislukt} (familie kan opnieuw proberen)`]] : []),
   ];
   const text = rows.map(([k, v]) => `${k}: ${v}`).join('\n') + (map ? `\n\nOpen de map: ${map}` : '');
   const html = `<table style="font-family:Arial,sans-serif;font-size:15px;border-collapse:collapse">${rows
-    .map(([k, v]) => `<tr><td style="padding:5px 16px 5px 0;color:#666">${esc(k)}</td><td style="padding:5px 0">${esc(v)}</td></tr>`)
+    .map(([k, v]) => `<tr><td style="padding:5px 16px 5px 0;color:#666">${esc(k)}</td><td style="padding:5px 0;white-space:pre-line">${esc(v)}</td></tr>`)
     .join('')}</table>` + (map ? `<p style="font-family:Arial,sans-serif;font-size:15px"><a href="${map}">Open de map in Google Drive</a></p>` : '');
 
   try {
