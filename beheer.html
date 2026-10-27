@@ -171,7 +171,7 @@
         <select class="st">${STATUSSEN.map((s) => `<option ${s === l.Status ? 'selected' : ''} value="${s}">${s || 'Status…'}</option>`).join('')}</select></div>
       <div class="chips"><span class="chip">${esc(stand)}</span>${l.stap ? `<span class="chip ja">Mail ${l.stap} staat klaar</span>` : ''}</div>
       ${l.stap ? `<input class="ond" style="width:100%" value="${esc(l.onderwerp)}"><div style="height:8px"></div><textarea class="tk">${esc(l.tekst)}</textarea>
-      <div class="rij"><button type="button" class="vs">Verstuur mail ${l.stap}</button><span class="code">Onder de mail komen automatisch je adres en een afmeldlink.</span></div>` : ''}
+      <div class="rij"><button type="button" class="licht tst">Testmail naar mezelf</button><button type="button" class="vs">Verstuur mail ${l.stap}</button><span class="code">Onder de mail komen automatisch je adres en een afmeldlink.</span></div>` : ''}
       <div class="uit"></div></div>`);
     const uit = k.querySelector('.uit');
     k.querySelector('.st').onchange = async (ev) => {
@@ -186,6 +186,12 @@
           uit.className = 'uit'; uit.textContent = '✓ Verstuurd naar ' + l['E-mail']; k.querySelector('.tk').disabled = true; k.querySelector('.ond').disabled = true;
           return true;
         } catch (e) { toonFout(uit, e); vs.disabled = false; return false; }
+      };
+      k.querySelector('.tst').onclick = async (ev) => {
+        ev.target.disabled = true;
+        try { const r = await papi({ actie: 'test', rij: l.rij, onderwerp: k.querySelector('.ond').value, tekst: k.querySelector('.tk').value });
+          uit.className = 'uit'; uit.textContent = '✓ Testmail verstuurd naar ' + r.naar + '. Er is niets naar ' + l.Bedrijf + ' gegaan.'; } catch (e) { toonFout(uit, e); }
+        ev.target.disabled = false;
       };
       vs.onclick = () => { if (confirm('Mail ' + l.stap + ' naar ' + l.Bedrijf + ' versturen?')) k.verstuur(); };
     }

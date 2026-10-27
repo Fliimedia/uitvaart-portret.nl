@@ -55,36 +55,34 @@ export async function zet(t, L, rij, velden) {
 
 // ---- Mailteksten ----
 const STANDAARD = {
-  1: { onderwerp: 'Fotofilm voor de families van {bedrijf}: de eerste maak ik gratis', tekst: `{aanhef}
+  1: { onderwerp: 'Even voorstellen: Daan, fotofilms voor uitvaarten', tekst: `{aanhef}
 
-Ik ben Daan Lubbers, televisiemaker uit Amsterdam. Naast mijn tv-werk maak ik fotofilms voor uitvaarten, via uitvaart-portret.nl.
+Ik ben Daan Lubbers, televisiemaker uit Amsterdam. Naast mijn werk voor tv maak ik fotofilms voor uitvaarten, onder de naam uitvaart-portret.nl. Ik kwam jullie website tegen en wilde me graag even voorstellen.
 
-Ik zie vaak dat families het maken van een fotopresentatie onderschatten: tot laat foto's zoeken en scannen, een PowerPoint die op de locatie niet afspeelt, muziek die er net niet onder past. Dat neem ik graag uit handen, en daarmee heb jij ook een zorg minder.
+Ik merk dat veel families het maken van een fotopresentatie zwaar vinden, juist in die drukke dagen. Daar help ik graag bij: de familie zet de foto's en muziek via een persoonlijke link klaar, en ik maak er een rustige, verzorgde film van die gewoon afspeelt op de locatie. Twee voorbeelden: https://uitvaart-portret.nl/voorbeelden.html
 
-Zo werkt het: de familie (of jij) krijgt een persoonlijke link, zet daar de foto's en de muziek in, en ik maak er een rustige, verzorgde film van in het formaat dat de locatie nodig heeft. Zijn de foto's er minstens 24 uur voor de dienst, dan staat de film op tijd klaar. Twee voorbeelden: https://uitvaart-portret.nl/voorbeelden.html
+Ik ben vooral benieuwd hoe jullie dit nu doen. Misschien hebben jullie het al prima geregeld; dan hoor ik dat ook graag. En lijkt het je wat, dan maak ik de eerste film voor een van jullie families met plezier kosteloos, zodat je zelf kunt zien of het past. Hoe ik verder met uitvaartondernemers samenwerk, staat hier: https://uitvaart-portret.nl/fotofilm-uitvaartverzorger.html
 
-Om kennis te maken maak ik de eerste film voor {bedrijf} kosteloos. Daarna betaal je als partner €179 excl. btw per film (€219 met filmpjes erin), op één factuur per maand. Wat je de familie rekent, bepaal je zelf.
-
-Zal ik je een link sturen voor de eerstvolgende familie? Bellen of appen kan ook: 06 18 42 48 58.
+Een kort berichtje terug is genoeg. Bellen of appen mag ook: 06 18 42 48 58.
 
 Hartelijke groet,
 Daan Lubbers` },
-  2: { onderwerp: 'Re: Fotofilm voor de families van {bedrijf}', tekst: `{aanhef}
+  2: { onderwerp: 'Nog even: fotofilms voor jullie families', tekst: `{aanhef}
 
-Ik stuurde je vorige week een mail over fotofilms voor uitvaarten. In jouw vak schiet zoiets er makkelijk bij in, dus ik stuur het nog één keer kort.
+Ik weet hoe druk jullie het hebben, dus geen enkele haast. Ik wilde alleen even checken of mijn vorige berichtje goed is aangekomen.
 
-Het aanbod staat: de eerste film maak ik gratis, zodat je zonder risico kunt zien of het bij jouw families past. Een kort antwoord is genoeg, ook als het "nee, dank je" is.
+Lijkt het je leuk om een keer kennis te maken, telefonisch of bij een kop koffie? Dan hoor ik het graag.
 
 Hartelijke groet,
 Daan Lubbers
 06 18 42 48 58` },
-  3: { onderwerp: 'Laatste berichtje: fotofilm {bedrijf}', tekst: `{aanhef}
+  3: { onderwerp: 'Laatste berichtje van mij', tekst: `{aanhef}
 
-Dit is mijn laatste mail hierover, beloofd.
+Ik wil je niet blijven mailen, dus dit is mijn laatste berichtje.
 
-Mocht een familie ooit vragen om een fotopresentatie of film, en je hebt er zelf geen tijd voor: bewaar dan gerust mijn nummer, 06 18 42 48 58. Ook op korte termijn denk ik graag mee, en de eerste film blijft op mijn kosten.
+Vraagt een familie ooit naar een fotofilm of fotopresentatie, dan ben je altijd welkom om me te bellen: 06 18 42 48 58. Ook als het snel moet.
 
-Hartelijke groet,
+Dank voor het lezen, en veel goeds gewenst.
 Daan Lubbers` },
 };
 
@@ -147,6 +145,16 @@ export default async function handler(req, res) {
     if (b.actie === 'status') {
       await zet(t, L, l.rij, { Status: String(b.status || '').slice(0, 40) });
       return res.json({ ok: true });
+    }
+    if (b.actie === 'test') {
+      const naar = process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl';
+      const { Resend } = await import('resend');
+      const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
+        from: 'Daan Lubbers <info@uitvaart-portret.nl>', to: naar, replyTo: 'info@uitvaart-portret.nl',
+        subject: '[TEST] ' + String(b.onderwerp || '').slice(0, 200), text: String(b.tekst || '').slice(0, 8000) + voet(l['E-mail'] || naar),
+      });
+      if (error) throw new Error('Resend: ' + JSON.stringify(error));
+      return res.json({ ok: true, naar });
     }
     if (b.actie === 'verstuur') {
       const n = volgende(l);
