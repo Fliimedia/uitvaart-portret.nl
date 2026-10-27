@@ -57,7 +57,7 @@ export async function zet(t, L, rij, velden) {
 const STANDAARD = {
   1: { onderwerp: 'Fotofilms voor jullie families: de eerste is op mijn kosten', tekst: `{aanhef}
 
-Ik ben Daan Lubbers, televisiemaker uit Amsterdam. Ik monteer onder meer voor RTL Tonight en Shownieuws. Naast mijn werk voor tv maak ik fotofilms voor uitvaarten, onder de naam uitvaart-portret.nl. Ik kwam jullie website tegen en wilde me graag even voorstellen.
+Ik ben Daan Lubbers, televisiemaker uit Amsterdam: van crimeprogramma's voor het productiehuis van John van den Heuvel tot Renze en Shownieuws. Naast mijn werk voor tv maak ik fotofilms voor uitvaarten, onder de naam uitvaart-portret.nl. Ik kwam jullie website tegen en wilde me graag even voorstellen.
 
 Veel families willen graag een fotopresentatie bij het afscheid, maar het lukt ze niet altijd: te weinig tijd, alleen papieren foto's, of foto's verspreid over de hele familie. Dan komt het vaak bij jullie terecht. Dat werk neem ik graag over. De familie zet de foto's en muziek via een persoonlijke link klaar, en ik maak er een rustig gemonteerde film van.
 
