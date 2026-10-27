@@ -1,7 +1,9 @@
 // Gedeelde helpers voor de uploadfuncties. Bestanden met _ worden door Vercel niet als functie gepubliceerd.
 import crypto from 'crypto';
 
-const ROOT_NAME = 'Uitvaart-portret uploads';
+// De klantmap heette eerst 'Uitvaart-portret uploads'. We zoeken eerst op de nieuwe naam, dan op de oude.
+const ROOT_NAME = "1 Klanten – foto's en films";
+const ROOT_OUD = 'Uitvaart-portret uploads';
 const FASES = ['1 Jeugd', '2 Jong volwassen', '3 Gezin en werk', '4 Later', '9 Weet ik niet'];
 
 function sign(value) {
@@ -51,6 +53,16 @@ async function folder(token, name, parent) {
   return f.id;
 }
 
+async function rootMap(token) {
+  for (const naam of [ROOT_NAME, ROOT_OUD]) {
+    const esc = naam.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const q = `name='${esc}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    const l = await drive(token, 'files?fields=files(id)&q=' + encodeURIComponent(q));
+    if (l.files.length) return l.files[0].id;
+  }
+  return folder(token, ROOT_NAME);
+}
+
 function fail(res, status, message) {
   res.status(status).json({ error: message });
 }
@@ -75,7 +87,7 @@ async function sheets(token, path, opts = {}) {
 }
 
 async function overzicht(token) {
-  const root = await folder(token, ROOT_NAME);
+  const root = await rootMap(token);
   const q = `name='${SHEET_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false and '${root}' in parents`;
   const list = await drive(token, 'files?fields=files(id)&q=' + encodeURIComponent(q));
   if (list.files.length) {
@@ -148,7 +160,7 @@ function mailHtml(tekst) {
 // ---- Film in Drive ----
 const FILMMAP = '5 Film';
 async function filmMap(token, code) {
-  const klant = await folder(token, code, await folder(token, ROOT_NAME));
+  const klant = await folder(token, code, await rootMap(token));
   return folder(token, FILMMAP, klant);
 }
 async function nieuwsteFilm(token, code) {
@@ -214,5 +226,5 @@ uitvaart-portret.nl`;
     text: `${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`, html: mailHtml(`${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`) });
 }
 
-export { ROOT_NAME, FASES, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
+export { ROOT_NAME, rootMap, FASES, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
   mail, mailHtml, isMail, waNummer, filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, lever };

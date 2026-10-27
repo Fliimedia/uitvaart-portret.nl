@@ -3,7 +3,8 @@
 // 2. Reviewverzoek 7 dagen na levering (als GOOGLE_REVIEW_URL is ingesteld en er een e-mailadres is).
 // 3. Aangeleverde foto's 30 dagen na upload, en de film 90 dagen na levering, naar de prullenbak van Drive.
 // De akkoordverklaring en het opdrachtenoverzicht blijven bewaard. Drive leegt de prullenbak zelf na 30 dagen.
-import { ROOT_NAME, FASES, googleToken, drive, folder, fail, logVeilig, nu, nuIso, leesOpdrachten, lever, mollie, mail, mailHtml, isMail, filmMap, logOpdracht } from './_lib.js';
+import { ROOT_NAME, rootMap, FASES, googleToken, drive, folder, fail, logVeilig, nu, nuIso, leesOpdrachten, lever, mollie, mail, mailHtml, isMail, filmMap, logOpdracht } from './_lib.js';
+import { leads, volgende } from './partners.js';
 
 const DAGEN = 30;
 
@@ -14,7 +15,7 @@ export default async function handler(req, res) {
   }
   const grens = new Date(Date.now() - DAGEN * 864e5).toISOString();
   const t = await googleToken();
-  const root = await folder(t, ROOT_NAME);
+  const root = await rootMap(t);
   const lijst = async (q) => (await drive(t, 'files?pageSize=1000&fields=files(id,name,createdTime)&q=' + encodeURIComponent(q))).files;
   const klanten = await lijst(`'${root}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
   const opgeruimd = [];
@@ -63,6 +64,15 @@ uitvaart-portret.nl`;
       }
     } catch (e) { console.error('Dagtaak', o.Code, e); }
   }
+  // --- Partnerfunnel: herinnering als er follow-ups klaarstaan ---
+  try {
+    const klaar = (await leads(t)).rijen.filter((l) => volgende(l) >= 2);
+    if (klaar.length) {
+      const tekst = `Er staan ${klaar.length} follow-up(s) aan uitvaartondernemers klaar:\n${klaar.map((l) => '- ' + l.Bedrijf + ' (mail ' + volgende(l) + ')').join('\n')}\n\nVersturen: https://uitvaart-portret.nl/beheer.html (tab Partners)`;
+      await mail({ to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl', subject: `${klaar.length} follow-up(s) klaar om te versturen`, text: tekst, html: mailHtml(tekst) });
+      gedaan.followups = klaar.length;
+    }
+  } catch (e) { console.error('Partnerherinnering', e); }
   console.log('Opgeruimd:', opgeruimd, gedaan);
   res.json({ ok: true, opgeruimd, ...gedaan });
 }

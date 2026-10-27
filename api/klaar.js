@@ -1,6 +1,6 @@
 // Stuurt Daan een mail zodra een familie foto's heeft verstuurd, met een link naar de Drive-map.
 import { Resend } from 'resend';
-import { ROOT_NAME, FASES, check, googleToken, folder, fail, nu, logVeilig, leesOpdrachten, isMail, mail as stuurMail, mailHtml } from './_lib.js';
+import { ROOT_NAME, rootMap, FASES, check, googleToken, folder, fail, nu, logVeilig, leesOpdrachten, isMail, mail as stuurMail, mailHtml } from './_lib.js';
 
 const FROM = 'Uitvaart portret <info@uitvaart-portret.nl>';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -62,7 +62,7 @@ export default async function handler(req, res) {
   let map = '';
   try {
     const t = await googleToken();
-    const id = await folder(t, c, await folder(t, ROOT_NAME));
+    const id = await folder(t, c, await rootMap(t));
     map = 'https://drive.google.com/drive/folders/' + id;
     if (akkoord) await bewijs(t, id, c, akkoord);
     if (muziekRegels.length) await tekstbestand(t, id, 'MUZIEK.txt', `Klant/opdracht: ${c}\n\nMuziek:\n${muziekTekst}\n`);

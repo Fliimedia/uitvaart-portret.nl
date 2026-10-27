@@ -32,6 +32,11 @@
   .balk div { height:100%; width:0; background:var(--green); }
   details summary { cursor:pointer; color:var(--green); font-weight:600; margin-top:12px; }
   label.kl { font-size:14px; color:var(--muted); display:flex; gap:6px; align-items:center; }
+  .tabs { display:flex; gap:8px; margin:0 0 16px; }
+  .tabs button { background:#fff; color:var(--ink); border:1px solid #CFC4B4; }
+  .tabs button.aan { background:var(--green); color:#fff; border-color:var(--green); }
+  textarea { width:100%; font:inherit; font-size:15px; padding:10px 12px; border:1px solid #CFC4B4; border-radius:10px; background:#fff; min-height:220px; }
+  .lead.klein { padding:12px 20px; }
   a.wa { display:inline-block; margin-top:6px; padding:8px 16px; border-radius:18px; background:#25D366; color:#fff; text-decoration:none; font-weight:600; }
 </style>
 </head>
@@ -45,7 +50,9 @@
     <div class="rij"><input id="ww" type="password" autocomplete="current-password" required style="flex:1"><button>Inloggen</button></div>
     <div class="uit fout" id="loginfout"></div>
   </form>
+  <div class="tabs" id="tabs" hidden><button type="button" class="aan" data-v="lijst">Opdrachten</button><button type="button" data-v="partners">Partners</button></div>
   <div id="lijst"></div>
+  <div id="partners" hidden></div>
 </main>
 <script>
 (() => {
@@ -142,13 +149,79 @@
     $('lijst').innerHTML = '<p class="code">Laden…</p>';
     try {
       const { lijst } = await api({ actie: 'lijst' });
-      $('login').hidden = true;
+      $('login').hidden = true; $('tabs').hidden = false;
       $('lijst').innerHTML = lijst.length ? '' : '<p class="code">Nog geen opdrachten.</p>';
       lijst.forEach((o) => $('lijst').appendChild(kaart(o)));
     } catch (e) {
       $('lijst').innerHTML = ''; $('login').hidden = false; $('loginfout').textContent = e.message;
     }
   }
+  // ---- Partners (uitvaartondernemers) ----
+  async function papi(body) {
+    const r = await fetch('/api/partners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wachtwoord: ww, ...body }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || 'Fout ' + r.status);
+    return j;
+  }
+  const STATUSSEN = ['', 'Gereageerd', 'Partner', 'Geen interesse', 'Bellen', 'Afgemeld'];
+  function leadKaart(l) {
+    const stand = ['Mail 1', 'Mail 2', 'Mail 3'].filter((m) => l[m]).map((m) => m + ': ' + l[m]).join(' · ') || 'nog niet gemaild';
+    const k = el(`<div class="kaart lead ${l.stap ? '' : 'klein'}">
+      <div class="kop"><div><h2>${esc(l.Bedrijf)}</h2><div class="code">${esc(l.Contactpersoon || '')}${l.Contactpersoon ? ' · ' : ''}${esc(l.Plaats)} · ${esc(l['E-mail'] || 'geen e-mail')}${l.Website ? ` · <a href="${esc(l.Website)}" target="_blank">site</a>` : ''}</div></div>
+        <select class="st">${STATUSSEN.map((s) => `<option ${s === l.Status ? 'selected' : ''} value="${s}">${s || 'Status…'}</option>`).join('')}</select></div>
+      <div class="chips"><span class="chip">${esc(stand)}</span>${l.stap ? `<span class="chip ja">Mail ${l.stap} staat klaar</span>` : ''}</div>
+      ${l.stap ? `<input class="ond" style="width:100%" value="${esc(l.onderwerp)}"><div style="height:8px"></div><textarea class="tk">${esc(l.tekst)}</textarea>
+      <div class="rij"><button type="button" class="vs">Verstuur mail ${l.stap}</button><span class="code">Onder de mail komen automatisch je adres en een afmeldlink.</span></div>` : ''}
+      <div class="uit"></div></div>`);
+    const uit = k.querySelector('.uit');
+    k.querySelector('.st').onchange = async (ev) => {
+      try { await papi({ actie: 'status', rij: l.rij, status: ev.target.value }); uit.className = 'uit'; uit.textContent = '✓ Status opgeslagen'; } catch (e) { toonFout(uit, e); }
+    };
+    const vs = k.querySelector('.vs');
+    if (vs) {
+      k.verstuur = async () => {
+        vs.disabled = true;
+        try {
+          await papi({ actie: 'verstuur', rij: l.rij, stap: l.stap, onderwerp: k.querySelector('.ond').value, tekst: k.querySelector('.tk').value });
+          uit.className = 'uit'; uit.textContent = '✓ Verstuurd naar ' + l['E-mail']; k.querySelector('.tk').disabled = true; k.querySelector('.ond').disabled = true;
+          return true;
+        } catch (e) { toonFout(uit, e); vs.disabled = false; return false; }
+      };
+      vs.onclick = () => { if (confirm('Mail ' + l.stap + ' naar ' + l.Bedrijf + ' versturen?')) k.verstuur(); };
+    }
+    return k;
+  }
+  async function laadPartners() {
+    const box = $('partners');
+    box.innerHTML = '<p class="code">Laden…</p>';
+    try {
+      const { lijst, bron, sheet } = await papi({ actie: 'lijst' });
+      const klaar = lijst.filter((l) => l.stap);
+      box.innerHTML = `<div class="kaart"><div class="kop"><div><h2>Uitvaartondernemers</h2>
+        <div class="code">${lijst.length} leads · ${klaar.length} mails staan klaar · teksten: ${esc(bron)}</div></div><a href="${esc(sheet)}" target="_blank">Leadlijst openen →</a></div>
+        ${klaar.length ? `<div class="rij"><button type="button" id="alles">Verstuur alle ${klaar.length} klaarstaande mails</button><span class="code" id="voortgang">Eén mail per 20 seconden, zodat het niet als bulk binnenkomt.</span></div>` : ''}</div>`;
+      const kaarten = lijst.sort((a, b) => (b.stap > 0) - (a.stap > 0)).map(leadKaart);
+      kaarten.forEach((k) => box.appendChild(k));
+      const alles = $('alles');
+      if (alles) alles.onclick = async () => {
+        const rij = kaarten.filter((k) => k.verstuur);
+        if (!confirm(rij.length + ' mails versturen? Controleer de teksten eerst. Dit duurt ongeveer ' + Math.ceil(rij.length / 3) + ' minuten; laat dit venster open.')) return;
+        alles.disabled = true;
+        for (let i = 0; i < rij.length; i++) {
+          $('voortgang').textContent = `Bezig: ${i + 1} van ${rij.length}…`;
+          if (!(await rij[i].verstuur())) { $('voortgang').textContent = `Gestopt bij ${i + 1}: zie de foutmelding bij die lead.`; alles.disabled = false; return; }
+          if (i < rij.length - 1) await new Promise((r) => setTimeout(r, 20000));
+        }
+        $('voortgang').textContent = '✓ Alle ' + rij.length + ' mails verstuurd.';
+      };
+    } catch (e) { box.innerHTML = ''; toonFout(box, e); }
+  }
+  document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
+    document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('aan', x === b));
+    $('lijst').hidden = b.dataset.v !== 'lijst'; $('partners').hidden = b.dataset.v !== 'partners';
+    if (b.dataset.v === 'partners') laadPartners();
+  });
+
   $('login').onsubmit = (e) => { e.preventDefault(); ww = $('ww').value; try { sessionStorage.setItem('beheer-ww', ww); } catch (er) {} laad(); };
   if (ww) laad();
 })();
