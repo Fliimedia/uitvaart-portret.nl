@@ -71,6 +71,8 @@ Daan Lubbers` },
 
 Ik weet hoe druk jullie het hebben, dus geen enkele haast. Ik wilde alleen even checken of mijn vorige berichtje goed is aangekomen.
 
+Werken jullie al met een systeem waarin families zelf een presentatie maken? Dan ben ik er voor de keren dat het niet lukt en jullie team het anders zelf moet doen. Ik lever een mp4 die zo in elk systeem past.
+
 Het aanbod staat nog: de eerste film voor een van jullie families maak ik kosteloos. Zal ik je een link sturen? Kennismaken bij een kop koffie of even bellen kan natuurlijk ook.
 
 Hartelijke groet,
