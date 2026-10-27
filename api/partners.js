@@ -55,15 +55,15 @@ export async function zet(t, L, rij, velden) {
 
 // ---- Mailteksten ----
 const STANDAARD = {
-  1: { onderwerp: 'Even voorstellen: Daan, fotofilms voor uitvaarten', tekst: `{aanhef}
+  1: { onderwerp: 'Fotofilms voor jullie families: de eerste is op mijn kosten', tekst: `{aanhef}
 
 Ik ben Daan Lubbers, televisiemaker uit Amsterdam. Naast mijn werk voor tv maak ik fotofilms voor uitvaarten, onder de naam uitvaart-portret.nl. Ik kwam jullie website tegen en wilde me graag even voorstellen.
 
 Ik merk dat veel families het maken van een fotopresentatie zwaar vinden, juist in die drukke dagen. Daar help ik graag bij: de familie zet de foto's en muziek via een persoonlijke link klaar, en ik maak er een rustige, verzorgde film van die gewoon afspeelt op de locatie. Twee voorbeelden: https://uitvaart-portret.nl/voorbeelden.html
 
-Ik ben vooral benieuwd hoe jullie dit nu doen. Misschien hebben jullie het al prima geregeld; dan hoor ik dat ook graag. En lijkt het je wat, dan maak ik de eerste film voor een van jullie families met plezier kosteloos, zodat je zelf kunt zien of het past. Hoe ik verder met uitvaartondernemers samenwerk, staat hier: https://uitvaart-portret.nl/fotofilm-uitvaartverzorger.html
+Lijkt het je wat? Dan maak ik de eerste film voor een van jullie families kosteloos, zodat je zonder risico kunt zien of het past. Daarna werk ik met een vast partnertarief van €179 excl. btw per film, op één factuur per maand. Wat je de familie rekent, bepaal je zelf. Meer uitleg: https://uitvaart-portret.nl/fotofilm-uitvaartverzorger.html
 
-Een kort berichtje terug is genoeg. Bellen of appen mag ook: 06 18 42 48 58.
+Zal ik je een persoonlijke link sturen, zodat je hem bij de eerstvolgende familie meteen kunt gebruiken? Een kort "ja" is genoeg. Bellen of appen mag ook: 06 18 42 48 58.
 
 Hartelijke groet,
 Daan Lubbers` },
@@ -71,7 +71,7 @@ Daan Lubbers` },
 
 Ik weet hoe druk jullie het hebben, dus geen enkele haast. Ik wilde alleen even checken of mijn vorige berichtje goed is aangekomen.
 
-Lijkt het je leuk om een keer kennis te maken, telefonisch of bij een kop koffie? Dan hoor ik het graag.
+Het aanbod staat nog: de eerste film voor een van jullie families maak ik kosteloos. Zal ik je een link sturen? Kennismaken bij een kop koffie of even bellen kan natuurlijk ook.
 
 Hartelijke groet,
 Daan Lubbers
@@ -80,7 +80,7 @@ Daan Lubbers
 
 Ik wil je niet blijven mailen, dus dit is mijn laatste berichtje.
 
-Vraagt een familie ooit naar een fotofilm of fotopresentatie, dan ben je altijd welkom om me te bellen: 06 18 42 48 58. Ook als het snel moet.
+Vraagt een familie ooit naar een fotofilm of fotopresentatie, dan ben je altijd welkom om me te bellen: 06 18 42 48 58. Ook als het snel moet, en de eerste film blijft kosteloos.
 
 Dank voor het lezen, en veel goeds gewenst.
 Daan Lubbers` },
