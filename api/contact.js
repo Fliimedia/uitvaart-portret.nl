@@ -17,7 +17,7 @@ function uploadLink(naam) {
 }
 
 // Kant-en-klaar antwoord voor Daan; hij leest het na en verstuurt het zelf.
-function antwoord(naam, datum, link) {
+export function antwoord(naam, datum, link) {
   const vandaag = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Amsterdam' });
   const dagen = datum ? Math.round((Date.parse(datum) - Date.parse(vandaag)) / 864e5) : null;
   const wanneer = datum && !Number.isNaN(dagen)
@@ -72,7 +72,17 @@ export default async function handler(req, res) {
   const reply = antwoord(naam, /^\d{4}-\d{2}-\d{2}$/.test(datum) ? datum : '', link);
   const wa = isMail ? '' : waNummer(contact);
   const knop = (href, label) => `<a href="${href}" style="display:inline-block;margin:0 8px 8px 0;padding:10px 18px;border-radius:20px;background:#4B5A48;color:#fff;text-decoration:none;font-family:Arial,sans-serif;font-size:15px">${label}</a>`;
-  const knoppen = (isMail ? knop(`mailto:${encodeURIComponent(contact)}?subject=${encodeURIComponent('Uw fotofilm – uitvaart-portret.nl')}&body=${encodeURIComponent(reply)}`, 'Antwoord per mail') : '')
+  const verstuurLink = `https://www.uitvaart-portret.nl/api/antwoord?c=${encodeURIComponent(code)}&s=${sign('antwoord:' + code)}`;
+  let auto = false;
+  if (isMail && process.env.AUTO_ANTWOORD === '1') {
+    try {
+      await resend.emails.send({ from: 'Daan Lubbers <info@uitvaart-portret.nl>', to: contact, replyTo: 'info@uitvaart-portret.nl',
+        subject: 'Uw fotofilm – uitvaart-portret.nl', text: reply });
+      await logVeilig(code, { 'Antwoord verstuurd': nu() + ' (automatisch)', 'Antwoord aangepast': 'nee' });
+      auto = true;
+    } catch (e) { console.error('Automatisch antwoord', e); }
+  }
+  const knoppen = (isMail && !auto ? knop(verstuurLink, 'Bekijk en verstuur antwoord') : '') + (isMail ? knop(`mailto:${encodeURIComponent(contact)}?subject=${encodeURIComponent('Uw fotofilm – uitvaart-portret.nl')}&body=${encodeURIComponent(reply)}`, 'Zelf mailen') : '')
     + (wa ? knop(`https://wa.me/${wa}?text=${encodeURIComponent(reply)}`, 'Antwoord via WhatsApp') : '');
   const rows = [
     ['Naam', naam],
@@ -87,6 +97,7 @@ export default async function handler(req, res) {
     .join('')}</table>`
     + `<p style="font-family:Arial,sans-serif;font-size:15px;margin:20px 0 8px"><strong>Uploadlink voor deze klant:</strong><br><a href="${link}">${esc(link)}</a></p>`
     + (knoppen ? `<p style="margin:12px 0">${knoppen}</p>` : '')
+    + (auto ? `<p style="font-family:Arial,sans-serif;font-size:15px;color:#2F3D2C"><strong>✓ Dit antwoord is automatisch verstuurd.</strong></p>` : '')
     + `<p style="font-family:Arial,sans-serif;font-size:13px;color:#666;margin:16px 0 4px">Voorstel voor je antwoord (lees na, pas aan waar nodig):</p>`
     + `<pre style="font-family:Arial,sans-serif;font-size:14px;white-space:pre-wrap;background:#F3EEE6;padding:14px;border-radius:10px">${esc(reply)}</pre>`;
 

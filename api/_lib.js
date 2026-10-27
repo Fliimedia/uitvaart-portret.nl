@@ -71,7 +71,7 @@ function fail(res, status, message) {
 const SHEET_NAME = 'Opdrachtenoverzicht';
 const KOLOMMEN = ['Code', 'Naam', 'Contact', 'Datum uitvaart', 'Aanvraag', 'Uploadlink', 'Upload ontvangen',
   "Aantal foto's", "Extra foto's (boven 60)", 'Akkoord voorwaarden', 'Drive-map', 'Concept', 'Betaald', 'Geleverd', 'Notities',
-  'Pakket', 'Bedrag', 'Betaallink', 'Film', 'Review gevraagd', 'Muziek'];
+  'Pakket', 'Bedrag', 'Betaallink', 'Film', 'Review gevraagd', 'Muziek', 'Antwoord verstuurd', 'Antwoord aangepast'];
 
 function nu() {
   return new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', dateStyle: 'short', timeStyle: 'short' });
