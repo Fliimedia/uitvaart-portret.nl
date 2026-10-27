@@ -57,9 +57,11 @@ export async function zet(t, L, rij, velden) {
 const STANDAARD = {
   1: { onderwerp: 'Fotofilms voor jullie families: de eerste is op mijn kosten', tekst: `{aanhef}
 
-Ik ben Daan Lubbers, televisiemaker uit Amsterdam. Naast mijn werk voor tv maak ik fotofilms voor uitvaarten, onder de naam uitvaart-portret.nl. Ik kwam jullie website tegen en wilde me graag even voorstellen.
+Ik ben Daan Lubbers, televisiemaker uit Amsterdam, onder meer voor het productiehuis van John van den Heuvel en voor Talpa Network. Naast mijn werk voor tv maak ik fotofilms voor uitvaarten, onder de naam uitvaart-portret.nl. Ik kwam jullie website tegen en wilde me graag even voorstellen.
 
-Ik merk dat veel families het maken van een fotopresentatie zwaar vinden, juist in die drukke dagen. Daar help ik graag bij: de familie zet de foto's en muziek via een persoonlijke link klaar, en ik maak er een rustige, verzorgde film van die gewoon afspeelt op de locatie. Twee voorbeelden: https://uitvaart-portret.nl/voorbeelden.html
+Veel families willen graag een fotopresentatie bij het afscheid, maar het lukt ze niet altijd: te weinig tijd, alleen papieren foto's, of foto's verspreid over de hele familie. Dan komt het vaak bij jullie terecht. Dat werk neem ik graag over. De familie zet de foto's en muziek via een persoonlijke link klaar, en ik maak er een rustig gemonteerde film van.
+
+Werken jullie met een systeem zoals een online ceremonie? Dan lever ik een mp4 die je daar zo in zet. In de film staat geen logo van mij; jullie blijven het aanspreekpunt voor de familie. Twee voorbeelden: https://uitvaart-portret.nl/voorbeelden.html
 
 Lijkt het je wat? Dan maak ik de eerste film voor een van jullie families kosteloos, zodat je zonder risico kunt zien of het past. Daarna werk ik met een vast partnertarief van €179 excl. btw per film, op één factuur per maand. Wat je de familie rekent, bepaal je zelf. Meer uitleg: https://uitvaart-portret.nl/fotofilm-uitvaartverzorger.html
 
@@ -70,6 +72,8 @@ Daan Lubbers` },
   2: { onderwerp: 'Nog even: fotofilms voor jullie families', tekst: `{aanhef}
 
 Ik weet hoe druk jullie het hebben, dus geen enkele haast. Ik wilde alleen even checken of mijn vorige berichtje goed is aangekomen.
+
+Werken jullie al met een systeem waarin families zelf een presentatie maken? Dan ben ik er voor de keren dat het niet lukt en jullie team het anders zelf moet doen. Ik lever een mp4 die zo in elk systeem past.
 
 Het aanbod staat nog: de eerste film voor een van jullie families maak ik kosteloos. Zal ik je een link sturen? Kennismaken bij een kop koffie of even bellen kan natuurlijk ook.
 
