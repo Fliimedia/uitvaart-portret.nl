@@ -7,13 +7,13 @@
 UIT="$HOME/Movies/Fotofilms"
 VERSIE="4.1"
 APP="$HOME/Library/Application Support/Uitvaart-portret"
-BRON="https://uitvaart-portret.nl/tools"
+BRON="https://www.uitvaart-portret.nl/tools"
 
 # ---- Nieuwe versie? Eerst vragen, dan pas bijwerken. De vorige versie blijft bewaard. ----
 bijwerken() {
   [[ -n "$FOTOFILM_NIET_BIJWERKEN" ]] && return
   local nieuw overslaan antwoord tmp verwacht echt
-  nieuw=$(curl -fsS -m 4 "$BRON/versie.txt" 2>/dev/null | tr -d '[:space:]')
+  nieuw=$(curl -fsSL -m 4 "$BRON/versie.txt" 2>/dev/null | tr -d '[:space:]')
   [[ "$nieuw" =~ '^[0-9]+(\.[0-9]+)*$' ]] || return          # offline of geen geldig antwoord: gewoon doorgaan
   autoload -Uz is-at-least
   is-at-least "$nieuw" "$VERSIE" && return                     # we zijn al bij
@@ -23,8 +23,8 @@ bijwerken() {
   if [[ "$antwoord" == "Deze versie overslaan" ]]; then mkdir -p "$APP"; print -r -- "$nieuw" > "$APP/overslaan.txt"; return; fi
   [[ "$antwoord" == "Bijwerken" ]] || return
   tmp=$(mktemp "${TMPDIR:-/tmp}/fotofilm-nieuw.XXXXXX")
-  verwacht=$(curl -fsS -m 4 "$BRON/fotofilm-voorbereiden.sha256" 2>/dev/null | awk '{print $1}')
-  if ! curl -fsS -m 120 "$BRON/fotofilm-voorbereiden.command" -o "$tmp" 2>/dev/null \
+  verwacht=$(curl -fsSL -m 4 "$BRON/fotofilm-voorbereiden.sha256" 2>/dev/null | awk '{print $1}')
+  if ! curl -fsSL -m 120 "$BRON/fotofilm-voorbereiden.command" -o "$tmp" 2>/dev/null \
      || [[ -z "$verwacht" || "$(shasum -a 256 "$tmp" | awk '{print $1}')" != "$verwacht" ]] \
      || [[ "$(head -1 "$tmp")" != "#!/bin/zsh" ]]; then
     rm -f "$tmp"

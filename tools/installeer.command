@@ -3,7 +3,7 @@
 # Haalt de nieuwste versie van uitvaart-portret.nl; lukt dat niet, dan de versie die naast dit bestand staat.
 HIER="${0:A:h}"
 APP="$HOME/Library/Application Support/Uitvaart-portret"
-BRON="https://uitvaart-portret.nl/tools"
+BRON="https://www.uitvaart-portret.nl/tools"
 TOOL="$APP/Fotofilm voorbereiden.command"
 [[ -t 1 ]] && clear
 echo "Uitvaart-portret tools installeren…"
@@ -11,8 +11,8 @@ mkdir -p "$APP" "$HOME/Movies/Fotofilms"
 
 # 1. Het programma
 tmp=$(mktemp "${TMPDIR:-/tmp}/fotofilm-inst.XXXXXX")
-verwacht=$(curl -fsS -m 5 "$BRON/fotofilm-voorbereiden.sha256" 2>/dev/null | awk '{print $1}')
-if curl -fsS -m 120 "$BRON/fotofilm-voorbereiden.command" -o "$tmp" 2>/dev/null \
+verwacht=$(curl -fsSL -m 5 "$BRON/fotofilm-voorbereiden.sha256" 2>/dev/null | awk '{print $1}')
+if curl -fsSL -m 120 "$BRON/fotofilm-voorbereiden.command" -o "$tmp" 2>/dev/null \
    && [[ -n "$verwacht" && "$(shasum -a 256 "$tmp" | awk '{print $1}')" == "$verwacht" ]] \
    && [[ "$(head -1 "$tmp")" == "#!/bin/zsh" ]]; then
   [[ -f "$TOOL" ]] && { mkdir -p "$APP/vorige versies"; cp -f "$TOOL" "$APP/vorige versies/Fotofilm voorbereiden (voor installatie).command"; }
