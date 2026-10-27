@@ -1,4 +1,5 @@
 User-agent: *
 Disallow: /_sjabloon-landingspagina.html
+Disallow: /tools/
 
 Sitemap: https://uitvaart-portret.nl/sitemap.xml
