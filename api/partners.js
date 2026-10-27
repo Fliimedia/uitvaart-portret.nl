@@ -151,7 +151,7 @@ export default async function handler(req, res) {
       const { Resend } = await import('resend');
       const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
         from: 'Daan Lubbers <info@uitvaart-portret.nl>', to: naar, replyTo: 'info@uitvaart-portret.nl',
-        subject: '[TEST] ' + String(b.onderwerp || '').slice(0, 200), text: String(b.tekst || '').slice(0, 8000) + voet(l['E-mail'] || naar),
+        subject: '[TEST] ' + String(b.onderwerp || '').slice(0, 200), text: String(b.tekst || '').slice(0, 8000) + voet(naar),
       });
       if (error) throw new Error('Resend: ' + JSON.stringify(error));
       return res.json({ ok: true, naar });
