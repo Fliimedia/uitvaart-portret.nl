@@ -1,6 +1,6 @@
 // Stuurt Daan een mail zodra een familie foto's heeft verstuurd, met een link naar de Drive-map.
 import { Resend } from 'resend';
-import { ROOT_NAME, FASES, check, googleToken, folder, fail, nu, logVeilig } from './_lib.js';
+import { ROOT_NAME, FASES, check, googleToken, folder, fail, nu, logVeilig, leesOpdrachten, isMail, mail as stuurMail, mailHtml } from './_lib.js';
 
 const FROM = 'Uitvaart portret <info@uitvaart-portret.nl>';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
   const { c, s } = b;
   if (!check(c, s)) return fail(res, 403, 'Ongeldige link');
 
-  const perFase = Array.isArray(b.perFase) ? b.perFase.slice(0, 4).map((n) => Math.max(0, parseInt(n, 10) || 0)) : [0, 0, 0, 0];
+  const perFase = Array.isArray(b.perFase) ? b.perFase.slice(0, FASES.length).map((n) => Math.max(0, parseInt(n, 10) || 0)) : FASES.map(() => 0);
   const totaal = perFase.reduce((a, n) => a + n, 0);
   const ster = Math.max(0, parseInt(b.ster, 10) || 0);
   const mislukt = Math.max(0, parseInt(b.mislukt, 10) || 0);
@@ -65,13 +65,39 @@ export default async function handler(req, res) {
     const id = await folder(t, c, await folder(t, ROOT_NAME));
     map = 'https://drive.google.com/drive/folders/' + id;
     if (akkoord) await bewijs(t, id, c, akkoord);
-    await tekstbestand(t, id, 'MUZIEK.txt', `Klant/opdracht: ${c}\n\nMuziek:\n${muziekTekst}\n`);
+    if (muziekRegels.length) await tekstbestand(t, id, 'MUZIEK.txt', `Klant/opdracht: ${c}\n\nMuziek:\n${muziekTekst}\n`);
   } catch (e) {
     console.error('Drive-map of akkoordbestand mislukt', e);
   }
 
-  await logVeilig(c, { 'Upload ontvangen': nu(), "Aantal foto's": totaal, "Extra foto's (boven 60)": Math.max(0, totaal - 60),
-    'Akkoord voorwaarden': akkoord || 'NIET', 'Drive-map': map, Muziek: muziekRegels.join(' | ') || 'NIET' });
+  // Eerdere gegevens van deze opdracht (er kunnen meerdere familieleden uploaden).
+  let o = null;
+  try { o = (await leesOpdrachten(await googleToken())).find((r) => r.Code === c) || null; } catch (e) { console.error('Opdracht lezen', e); }
+  const eerderAantal = o ? parseInt(o["Aantal foto's"], 10) || 0 : 0;
+  const nieuwTotaal = eerderAantal + totaal;
+
+  // Bevestiging aan de familie (contactpersoon van de aanvraag), zwart op wit.
+  try {
+    if (o && isMail(o.Contact) && totaal > 0) {
+      const naamF = o.Naam || '';
+      const muziekZin = muziekRegels.length ? `\n\nMuziek:\n${muziekRegels.join('\n')}` : '';
+      const tekstF = `Beste ${naamF},
+
+We hebben ${totaal} ${totaal === 1 ? 'foto' : "foto's"} ontvangen voor de fotofilm.${muziekZin}
+
+U hoeft verder niets te doen. Willen familieleden nog foto's toevoegen? Dat kan via dezelfde link. U hoort van mij zodra het concept klaar is.
+
+Met vriendelijke groet,
+Daan Lubbers
+uitvaart-portret.nl`;
+      await stuurMail({ to: o.Contact.trim(), subject: "Uw foto's zijn ontvangen", text: tekstF, html: mailHtml(tekstF) });
+    }
+  } catch (e) { console.error('Bevestiging familie mislukt', e); }
+
+  // Optellen bij eerdere uploads; eerder doorgegeven muziek en akkoord niet overschrijven.
+  const muziekLog = [o && o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekRegels.join(' | ')].filter(Boolean).join(' | ');
+  await logVeilig(c, { 'Upload ontvangen': nu(), "Aantal foto's": nieuwTotaal, "Extra foto's (boven 60)": Math.max(0, nieuwTotaal - 60),
+    'Akkoord voorwaarden': akkoord || (o && o['Akkoord voorwaarden']) || 'NIET', 'Drive-map': map, Muziek: muziekLog || 'NIET' });
 
   const rows = [
     ['Klant', c],

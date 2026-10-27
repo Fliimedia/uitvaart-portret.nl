@@ -45,6 +45,8 @@
   #muziek-bestanden { margin:10px 0 0; font-size:15px; color:var(--muted); }
   #muziek-bestanden button { border:0; background:none; color:#8A3B2E; cursor:pointer; font:inherit; }
   @media (max-width:520px) { .nummer { grid-template-columns:1fr; } }
+  .delen { display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; margin:6px 0 18px; font-size:15px; color:var(--muted); }
+  .muziek-al { margin:12px 0 0; padding:14px 16px; border-radius:12px; background:#EEF1EC; color:var(--ink); font-size:15px; }
   .bar { position:fixed; left:0; right:0; bottom:0; background:var(--card); border-top:1px solid var(--line); padding:14px 16px; }
   .bar-in { max-width:880px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; gap:14px; }
   .telling { font-size:15px; color:var(--muted); }
@@ -74,8 +76,9 @@
   <div id="kiezen">
     <h1>Foto's voor de film</h1>
     <p class="intro">Dit kost ongeveer tien minuten. De precieze volgorde hoeft u niet te bepalen; dat doen wij.</p>
+    <p class="delen"><button type="button" class="add licht deel-knop">Deel deze link met familie</button> <span>Iedereen kan via dezelfde link foto's toevoegen.</span></p>
     <ol class="steps">
-      <li>Zet de foto's in de periode waar ze bij horen.</li>
+      <li>Zet de foto's in de periode waar ze bij horen. Twijfelt u? Zet ze bij <strong>Weet ik niet zeker</strong>.</li>
       <li>Tik op de <strong>☆</strong> bij foto's die er zeker in moeten.</li>
       <li>Kies één <strong>portretfoto</strong> voor het begin of einde van de film.</li>
       <li>Vul onderaan de <strong>muziek</strong> in.</li>
@@ -104,7 +107,8 @@
 
   <section id="klaar" class="box hidden">
     <h2>Dank u wel</h2>
-    <p>Alle foto's zijn goed aangekomen. Daan gaat ermee aan de slag en neemt contact met u op zodra het concept klaar is.</p>
+    <p>Alle foto's zijn goed aangekomen. Daan gaat ermee aan de slag en neemt contact met u op zodra het concept klaar is. Heeft u ons uw e-mailadres gegeven, dan ontvangt u ook een bevestiging per mail.</p>
+    <p class="delen"><button type="button" class="add licht deel-knop">Deel deze link met familie</button> <span>Hebben anderen nog foto's? Zij kunnen ze via dezelfde link toevoegen.</span></p>
   </section>
 
   <section id="mislukt" class="box hidden">
@@ -128,6 +132,7 @@
     ['Jong volwassen', 'Studie, eerste baan, verliefd'],
     ['Gezin en werk', 'Trouwen, kinderen, werk, vakanties'],
     ['Later', 'De latere jaren, kleinkinderen, recente foto\'s'],
+    ['Weet ik niet zeker', 'Twijfelt u waar een foto hoort? Zet hem hier, dan zoeken wij het uit.'],
   ];
   const params = new URLSearchParams(location.search);
   const c = params.get('c'), s = params.get('s');
@@ -178,13 +183,14 @@
     $('muziek-bestanden').innerHTML = muziekFiles.map((f, k) => `🎵 ${f.name.replace(/[<>&]/g, '')} <button type="button" data-k="${k}" aria-label="Verwijderen">×</button>`).join('<br>');
     $('muziek-bestanden').querySelectorAll('button').forEach(btn => btn.onclick = () => { muziekFiles.splice(+btn.dataset.k, 1); tekenNummers(); render(); });
   }
-  function muziekOk() { return muziekFiles.length > 0 || nummers.some(m => m.titel.trim().length > 1); }
+  let muziekAl = '';
+  function muziekOk() { return !!muziekAl || muziekFiles.length > 0 || nummers.some(m => m.titel.trim().length > 1); }
   $('nummer-plus').onclick = () => { if (nummers.length < 5) { nummers.push({ titel: '', link: '' }); tekenNummers(); } };
   $('muziek-file').onchange = (e) => { muziekFiles.push(...[...e.target.files].slice(0, 5)); e.target.value = ''; tekenNummers(); render(); };
   tekenNummers();
 
   function render() {
-    for (let f = 0; f < 4; f++) {
+    for (let f = 0; f < FASES.length; f++) {
       const grid = $('grid' + f);
       grid.innerHTML = '';
       items.filter(i => i.fase === f).forEach(i => {
@@ -234,6 +240,32 @@
   }
 
   let folders = null;
+
+  // Link delen met familie (deelmenu op telefoon, anders WhatsApp).
+  document.querySelectorAll('.deel-knop').forEach(btn => btn.onclick = () => {
+    const tekst = "Wil je ook foto's toevoegen voor de fotofilm? Dat kan via deze link:";
+    if (navigator.share) navigator.share({ title: "Foto's voor de film", text: tekst, url: location.href }).catch(() => {});
+    else window.open('https://wa.me/?text=' + encodeURIComponent(tekst + ' ' + location.href), '_blank');
+  });
+
+  // Status ophalen: heeft een familielid al muziek en akkoord doorgegeven?
+  post('/api/prepare', { c, s }).then(r => {
+    if (r && r.folders) folders = r.folders;
+    const e = (r && r.eerder) || {};
+    if (e.muziek) {
+      muziekAl = e.muziek;
+      const p = document.createElement('p'); p.className = 'muziek-al';
+      p.textContent = 'De muziek is al doorgegeven: ' + e.muziek + '. U hoeft hier niets in te vullen, maar mag wel iets toevoegen.';
+      $('nummers').before(p);
+    }
+    if (e.akkoord) {
+      $('akkoord').checked = true;
+      const l = $('akkoord').closest('label');
+      $('akkoord').style.display = 'none';
+      if (l && l.querySelector('span')) l.querySelector('span').textContent = 'Het akkoord met de voorwaarden is al gegeven door uw familielid.';
+    }
+    render();
+  }).catch(() => {});
   async function upload(jobs) {
     busy = true; render();
     $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden');
@@ -273,7 +305,7 @@
     await Promise.all([worker(), worker(), worker()]);
     // Melding aan Daan (loopt door op de achtergrond; een fout hier raakt de klant niet).
     if (gelukt.length) {
-      const perFase = [0, 0, 0, 0]; gelukt.filter(j => !j.audio).forEach(j => perFase[j.fase]++);
+      const perFase = FASES.map(() => 0); gelukt.filter(j => !j.audio).forEach(j => perFase[j.fase]++);
       fetch('/api/klaar', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ c, s, perFase, ster: gelukt.filter(j => j.name.includes('★')).length,
           portret: gelukt.some(j => j.name.includes('PORTRET')), mislukt: failed.length, akkoord: akkoordTijd,
@@ -293,7 +325,7 @@
   $('verstuur').onclick = () => {
     if (!portretId && !confirm('U heeft nog geen portretfoto gekozen. Toch versturen?')) return;
     const jobs = [];
-    for (let f = 0; f < 4; f++) {
+    for (let f = 0; f < FASES.length; f++) {
       items.filter(i => i.fase === f).forEach((i, n) => {
         const tags = (i.star ? ' ★' : '') + (i.id === portretId ? ' PORTRET' : '');
         jobs.push({ file: i.file, mime: i.mime, fase: f, name: String(n + 1).padStart(2, '0') + tags + ' - ' + i.file.name });

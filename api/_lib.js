@@ -2,7 +2,7 @@
 import crypto from 'crypto';
 
 const ROOT_NAME = 'Uitvaart-portret uploads';
-const FASES = ['1 Jeugd', '2 Jong volwassen', '3 Gezin en werk', '4 Later'];
+const FASES = ['1 Jeugd', '2 Jong volwassen', '3 Gezin en werk', '4 Later', '9 Weet ik niet'];
 
 function sign(value) {
   return crypto.createHmac('sha256', process.env.UPLOAD_SECRET).update(value).digest('hex').slice(0, 24);
