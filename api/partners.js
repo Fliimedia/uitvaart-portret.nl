@@ -86,10 +86,32 @@ Dank voor het lezen, en veel goeds gewenst.
 Daan Lubbers` },
 };
 
+const UITLEG = `FUNNEL UITVAARTONDERNEMERS
+
+Pas de teksten hieronder gerust aan; beheer.html (tab Partners) leest ze uit dit document. Laat de regels met === MAIL en Onderwerp: staan.
+Je kunt deze woorden gebruiken: {aanhef} (wordt "Hoi Babette," of "Hoi,"), {voornaam}, {bedrijf}, {plaats}. Je adres en de afmeldlink komen er automatisch onder.
+
+Volgorde: mail 1, dan mail 2 na 4 dagen, dan mail 3 na 7 dagen, alleen zolang de Status in de leadlijst leeg is. Zet de Status op Gereageerd, Partner, Geen interesse of Bellen om de reeks te stoppen.
+
+Aanbod: eerste film kosteloos. Daarna €179 excl. btw (Klassiek) of €219 excl. btw (Modern), één factuur per maand. Spoed onder 24 uur +€99. Strippenkaart pas later, voor partners met 3+ films.
+Zegt iemand ja: maak via link.html een uploadlink met de naam van de familie. Eerste film: geen betaallink sturen, zet in Notities "Partner [bedrijf] – gratis kennismaking".
+`;
+
+// Maakt het Doc met de standaardteksten aan (de site mag alleen bestanden lezen die hij zelf heeft gemaakt).
+async function maakDoc(t) {
+  const tekst = UITLEG + [1, 2, 3].map((n) => `\n=== MAIL ${n} ===\nOnderwerp: ${STANDAARD[n].onderwerp}\n${STANDAARD[n].tekst}\n`).join('');
+  const map = await folder(t, SALES_MAP);
+  const grens = 'grens' + crypto.randomBytes(6).toString('hex');
+  const body = `--${grens}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: DOC, mimeType: 'application/vnd.google-apps.document', parents: [map] })}\r\n--${grens}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${tekst}\r\n--${grens}--`;
+  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'multipart/related; boundary=' + grens }, body });
+  if (!r.ok) console.error('Doc aanmaken', r.status, await r.text());
+}
+
 // Leest de teksten uit het Google Doc. Opbouw: per mail een regel "=== MAIL 1 ===", dan "Onderwerp: …", dan de tekst.
 async function teksten(t) {
   const id = await zoek(t, DOC, 'application/vnd.google-apps.document');
-  if (!id) return { bron: 'standaardteksten (Doc niet gevonden)', mails: STANDAARD };
+  if (!id) { await maakDoc(t); return { bron: 'standaardteksten (Doc is nu aangemaakt in Drive)', mails: STANDAARD }; }
   const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}/export?mimeType=text/plain`, { headers: { Authorization: 'Bearer ' + t } });
   if (!r.ok) return { bron: 'standaardteksten (Doc niet leesbaar)', mails: STANDAARD };
   const doc = (await r.text()).replace(/^﻿/, '').replace(/\r/g, '').replace(/[ \t ]+$/gm, '').replace(/\n{3,}/g, '\n\n');
