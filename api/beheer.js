@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     const order = (await leesOpdrachten(t)).find((o) => o.Code === b.code);
     if (!order) return fail(res, 404, 'Opdracht niet gevonden');
     const naam = order.Naam || '';
-    // Verzamellink wordt een film: naar het tabblad Films (de €29 blijft verrekend via de kolom Download).
+    // Verzamellink wordt een film: naar het tabblad Films (de €39 blijft verrekend via de kolom Download).
     if (b.actie === 'naarFilm') {
       await logOpdracht(t, order.Code, { Pakket: '', Notities: `${order.Notities ? order.Notities + '; ' : ''}Was verzamellink, wordt film ${nu()}` });
       return res.json({ ok: true, melding: 'Verplaatst naar Films.' });

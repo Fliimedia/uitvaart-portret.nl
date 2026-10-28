@@ -1,6 +1,6 @@
 // Uploadlinks en de verzamellink.
 // - Daan maakt een persoonlijke uploadlink (beveiligd met ADMIN_PASSWORD).
-// - Verzamellink (zelf maken): aanvragen, status bekijken, afsluiten en betalen (€29), en de terugkoppeling van de omzetserver.
+// - Verzamellink (zelf maken): aanvragen, status bekijken, afsluiten en betalen (€39), en de terugkoppeling van de omzetserver.
 import crypto from 'crypto';
 import { sign, check, fail, nu, nuIso, logVeilig, logOpdracht, isMail, mail, mailHtml, googleToken, drive, folder, rootMap,
   leesOpdrachten, deel, mollie, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, filmMappen } from './_lib.js';
@@ -147,7 +147,7 @@ async function mappen(t, c, o) {
   return { klant, fases, diashow, films };
 }
 const filmLabel = (f) => f.naam || 'Film ' + f.nr;
-// Download bij de verzamellink: €29, plus €9,99 per extra film.
+// Download bij de verzamellink: €39, plus €12,99 per extra film.
 const downloadPrijs = (n) => Math.round((DOWNLOAD_PRIJS + EXTRA_FILM_VERZAMEL * Math.max(0, n - 1)) * 100) / 100;
 const euro = (x) => '€' + (Number.isInteger(x) ? String(x) : x.toFixed(2).replace('.', ','));
 

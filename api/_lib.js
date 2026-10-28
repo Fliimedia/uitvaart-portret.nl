@@ -76,8 +76,8 @@ const KOLOMMEN = ['Code', 'Naam', 'Contact', 'Datum uitvaart', 'Aanvraag', 'Uplo
   'Pakket', 'Bedrag', 'Betaallink', 'Film', 'Review gevraagd', 'Muziek', 'Download', 'Partner', 'Films'];
 
 // Verzamellink (zelf maken): prijs van de download en adres van de omzetserver (Google Cloud Run, geen geheim).
-const DOWNLOAD_PRIJS = 29;
-const EXTRA_FILM_VERZAMEL = 9.99; // per extra film bij de verzamellink (consument incl. btw; partner excl. btw)
+const DOWNLOAD_PRIJS = 39; // consument, incl. 21% btw (partner: €24,99 excl. btw, zie beheer.html)
+const EXTRA_FILM_VERZAMEL = 12.99; // per extra film bij de verzamellink, consument incl. btw (partner: €9,99 excl. btw)
 
 // Meerdere films per opdracht: film 1 = de vakmappen in de klantmap; film 2+ = submap 'Film n – naam' met dezelfde vakken.
 const FILMSUB = /^Film (\d+) – (.+)$/;

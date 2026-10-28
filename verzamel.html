@@ -76,7 +76,7 @@
 
     <section class="box" id="afronden">
       <h2>Is iedereen klaar?</h2>
-      <p>Rond het verzamelen af en download alles in één keer, voor <strong id="prijs">€29</strong>:</p>
+      <p>Rond het verzamelen af en download alles in één keer, voor <strong id="prijs">€39</strong>:</p>
       <ul>
         <li>alle foto’s en filmpjes in hetzelfde formaat: breedbeeld 1920×1080 (JPEG en mp4), ook iPhone-foto’s en -video’s;</li>
         <li>rechtgezet en op volgorde genummerd: portretfoto, de periodes van het leven, daarna hobby’s en twijfelgevallen;</li>
@@ -101,7 +101,7 @@
 
     <section class="box warm">
       <h2>Toch liever dat Daan de film maakt?</h2>
-      <p id="upsell-tekst">Wordt het u te veel, of wilt u net iets meer dan een diashow? Dan maak ik de film. Uw foto’s staan al klaar, en een betaalde download van €29 wordt verrekend. Een fotofilm kost €249, met filmpjes erbij €299.</p>
+      <p id="upsell-tekst">Wordt het u te veel, of wilt u net iets meer dan een diashow? Dan maak ik de film. Uw foto’s staan al klaar, en een betaalde download van €39 wordt verrekend. Een fotofilm kost €249, met filmpjes erbij €299.</p>
       <div class="rij"><a class="knop" id="wa" href="https://wa.me/31618424858">App Daan</a> <a class="knop licht" href="tel:+31618424858">Bel 06 18 42 48 58</a> <a class="knop licht" id="ml" href="mailto:info@uitvaart-portret.nl">Mail</a></div>
     </section>
   </div>
@@ -125,7 +125,7 @@
     $('titel').textContent = 'Uw verzameling' + (j.naam ? ', ' + j.naam : '');
     if (j.datum) $('sub').textContent = 'Hier ziet u wat de familie heeft aangeleverd. Uitvaart: ' + j.datum + '. Deze pagina is alleen voor u.';
     const prijs = j.prijsTekst || '€' + j.prijs, meer = (j.films || []).length > 1;
-    $('prijs').textContent = prijs + (meer && !j.partner ? ` (${j.films.length} films: €29 + €9,99 per extra film)` : '');
+    $('prijs').textContent = prijs + (meer && !j.partner ? ` (${j.films.length} films: €39 + €12,99 per extra film)` : '');
     $('zelf-upload').href = j.uploadlink;
     let f = 0, v = 0;
     // Meerdere films (bijv. familie, vrienden, werk): per film een regel; anders per periode.
