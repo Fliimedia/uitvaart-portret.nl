@@ -76,7 +76,7 @@ const KOLOMMEN = ['Code', 'Naam', 'Contact', 'Datum uitvaart', 'Aanvraag', 'Uplo
 
 // Verzamellink (zelf maken): prijs van de download en adres van de omzetserver (Google Cloud Run, geen geheim).
 const DOWNLOAD_PRIJS = 29;
-const OMZET_URL = process.env.OMZET_URL || '';
+const OMZET_URL = process.env.OMZET_URL || 'https://omzetter-783697177718.europe-west4.run.app';
 
 function nu() {
   return new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', dateStyle: 'short', timeStyle: 'short' });
