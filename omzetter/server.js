@@ -198,6 +198,7 @@ export async function verwerk(o) {
 
 // ---------- Webserver ----------
 const TOEGESTAAN = /^https:\/\/(www\.)?uitvaart-portret\.nl\/api\/link$/;
+const BEZIG = new Map(); // code -> starttijd: dezelfde opdracht nooit twee keer tegelijk
 if (!process.env.OMZET_TEST) http.createServer(async (req, res) => {
   if (req.method === 'POST' && req.url === '/omzetten') {
     let body = '';
@@ -205,8 +206,10 @@ if (!process.env.OMZET_TEST) http.createServer(async (req, res) => {
     let o;
     try { o = JSON.parse(body); } catch (e) { res.writeHead(400).end('Ongeldig'); return; }
     if (!o.job || !TOEGESTAAN.test(o.terug || '') || !o.diashow || !Array.isArray(o.fases)) { res.writeHead(400).end('Ongeldig'); return; }
+    if (BEZIG.has(o.code) && Date.now() - BEZIG.get(o.code) < 60 * 60e3) { res.writeHead(202).end('Al bezig'); console.log('Dubbele opdracht genegeerd', o.code); return; }
+    BEZIG.set(o.code, Date.now());
     res.writeHead(202).end('Bezig');
-    verwerk(o).catch((e) => console.error('Opdracht mislukt', o.code, e));
+    verwerk(o).catch((e) => console.error('Opdracht mislukt', o.code, e)).finally(() => BEZIG.delete(o.code));
     return;
   }
   res.writeHead(200, { 'Content-Type': 'text/plain' }).end('Omzetserver uitvaart-portret.nl');

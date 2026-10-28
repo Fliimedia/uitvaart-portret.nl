@@ -14,5 +14,10 @@
       "source": "/b/:id",
       "destination": "/verzamel.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 60
+    }
+  }
 }
