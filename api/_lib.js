@@ -12,8 +12,9 @@ function sign(value) {
 }
 
 function check(value, sig) {
-  if (typeof value !== 'string' || typeof sig !== 'string' || sig.length !== 24) return false;
-  return crypto.timingSafeEqual(Buffer.from(sign(value)), Buffer.from(sig));
+  // Volledig (24) of verkort (minimaal 12 tekens, voor korte links zoals /z/… en /b/…).
+  if (typeof value !== 'string' || typeof sig !== 'string' || sig.length < 12 || sig.length > 24) return false;
+  return crypto.timingSafeEqual(Buffer.from(sign(value).slice(0, sig.length)), Buffer.from(sig));
 }
 
 async function googleToken() {

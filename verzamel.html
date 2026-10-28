@@ -2,6 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
+<base href="/">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Uw verzameling – Uitvaart portret</title>
@@ -99,7 +100,10 @@
 </main>
 <script>
 (function () {
-  const q = new URLSearchParams(location.search), c = q.get('c'), b = q.get('b'), terug = q.get('terug');
+  const q = new URLSearchParams(location.search), terug = q.get('terug');
+  let c = q.get('c'), b = q.get('b');
+  const kort = location.pathname.match(/^\/b\/([a-z0-9-]+)\.([0-9a-f]{12,24})\/?$/);
+  if (kort) { c = 'zelf-' + kort[1]; b = kort[2]; }
   const $ = (id) => document.getElementById(id);
   let info = null, pogingen = 0;
   const post = (body) => fetch('/api/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })

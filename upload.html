@@ -2,6 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
+<base href="/">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Foto's aanleveren – Uitvaart portret</title>
@@ -142,7 +143,9 @@
     ['Weet ik niet zeker', 'Twijfelt u waar een foto hoort? Zet hem hier, dan zoeken wij het uit.'],
   ];
   const params = new URLSearchParams(location.search);
-  const c = params.get('c'), s = params.get('s');
+  let c = params.get('c'), s = params.get('s');
+  const kort = location.pathname.match(/^\/z\/([a-z0-9-]+)\.([0-9a-f]{12,24})\/?$/);
+  if (kort) { c = 'zelf-' + kort[1]; s = kort[2]; }
   const $ = id => document.getElementById(id);
   if (!c || !s) { $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); return; }
 

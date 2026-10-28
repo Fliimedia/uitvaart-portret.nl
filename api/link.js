@@ -32,8 +32,14 @@ const maakCode = (naam, prefix = '') => {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'klant';
   return prefix + slug + '-' + crypto.randomBytes(4).toString('hex');
 };
-const uploadLink = (code) => `${SITE}/upload.html?c=${encodeURIComponent(code)}&s=${sign(code)}`;
-export const beheerLink = (code) => `${SITE}/verzamel.html?c=${encodeURIComponent(code)}&b=${sign('beheer:' + code)}`;
+// Korte links voor verzamellinks: /z/<code zonder zelf->.<12 tekens> (familie) en /b/… (aanvrager).
+const kortOf = (code) => String(code).startsWith('zelf-') ? String(code).slice(5) : '';
+const uploadLink = (code) => kortOf(code) ? `${SITE}/z/${kortOf(code)}.${sign(code).slice(0, 12)}`
+  : `${SITE}/upload.html?c=${encodeURIComponent(code)}&s=${sign(code)}`;
+export const beheerLink = (code) => `${SITE}/b/${kortOf(code)}.${sign('beheer:' + code).slice(0, 12)}`;
+const knop = (href, tekst) => `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:18px 0"><tr><td style="border-radius:26px;background:#4B5A48"><a href="${href}" style="display:inline-block;padding:14px 26px;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">${tekst}</a></td></tr></table>`;
+const html = (delen) => `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#25292A;max-width:560px">${delen.join('')}</div>`;
+const p = (t) => `<p style="margin:0 0 14px">${t}</p>`;
 
 async function linkHandler(req, res, { wachtwoord, naam }) {
   const ok = typeof wachtwoord === 'string' && process.env.ADMIN_PASSWORD &&
@@ -55,24 +61,30 @@ async function zelfLink(req, res, b) {
   const link = uploadLink(code), beheer = beheerLink(code);
   const tekst = `Beste ${naam},
 
-Hier is uw verzamellink${voor ? ' voor de foto’s van ' + voor : ''}. Deel deze link met familie en vrienden:
+Uw verzamellink${voor ? ' voor de foto’s van ' + voor : ''} staat klaar. Begin op uw eigen verzamelpagina:
+${beheer}
+
+Daar deelt u de link met familie en vrienden, voegt u zelf foto’s toe en ziet u wat er binnen is. Is iedereen klaar? Dan rondt u daar af en downloadt u alles in één keer: foto’s en filmpjes in breedbeeld, rechtgezet en op volgorde genummerd (€${DOWNLOAD_PRIJS}, u betaalt pas aan het eind).
+
+Deze pagina is alleen voor u. Stuur familie de deellink, niet deze mail:
 ${link}
 
-Iedereen kan via die link foto’s en filmpjes toevoegen, vanaf elke telefoon of computer. Zet de foto’s in de periode waar ze bij horen, dan staat de volgorde al goed. Papieren foto’s fotografeert u met de telefoon. Voor de muziek is een titel genoeg.
-
-Uw eigen beheerpagina (deel deze niet):
-${beheer}
-Daar ziet u wat er binnen is. Is iedereen klaar? Klik dan op 'Iedereen is klaar'. Voor €${DOWNLOAD_PRIJS} zetten wij alles om naar hetzelfde formaat: foto’s en filmpjes in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd. Daarna krijgt u één downloadlink.
-
-Toch liever dat ik de film voor u maak? Uw foto’s staan dan al klaar, en een betaalde download wordt verrekend. Antwoord gewoon op deze mail, of bel of app 06 18 42 48 58.
-
-Na 30 dagen worden de foto’s automatisch verwijderd.
+Toch liever dat ik de film voor u maak? Uw foto’s staan dan al klaar. Antwoord gewoon op deze mail, of bel of app 06 18 42 48 58.
 
 Met vriendelijke groet,
 Daan Lubbers
 uitvaart-portret.nl`;
+  const opmaak = html([
+    p(`Beste ${naam},`),
+    p(`Uw verzamellink${voor ? ' voor de foto’s van ' + voor : ''} staat klaar. Begin op uw eigen verzamelpagina:`),
+    knop(beheer, 'Open uw verzamelpagina'),
+    p(`Daar deelt u de link met familie en vrienden, voegt u zelf foto’s toe en ziet u wat er binnen is. Is iedereen klaar? Dan rondt u daar af en downloadt u alles in één keer: foto’s en filmpjes in breedbeeld, rechtgezet en op volgorde genummerd (€${DOWNLOAD_PRIJS}, u betaalt pas aan het eind).`),
+    p(`<span style="color:#6A6F6B">Deze pagina is alleen voor u. Stuur familie de deellink, niet deze mail. De deellink is: <a href="${link}" style="color:#4B5A48">${link.replace('https://www.', '')}</a></span>`),
+    p('Toch liever dat ik de film voor u maak? Uw foto’s staan dan al klaar. Antwoord gewoon op deze mail, of bel of app 06 18 42 48 58.'),
+    p('Met vriendelijke groet,<br>Daan Lubbers<br>uitvaart-portret.nl'),
+  ]);
   try {
-    await mail({ to: email, subject: 'Uw verzamellink', text: tekst, html: mailHtml(tekst), replyTo: DAAN() });
+    await mail({ to: email, subject: 'Uw verzamellink', text: tekst, html: opmaak, replyTo: DAAN() });
   } catch (e) {
     console.error('Verzamellink mail', e);
     return fail(res, 500, 'De mail kon niet verstuurd worden. Probeer het later opnieuw of mail info@uitvaart-portret.nl');
@@ -145,7 +157,7 @@ async function afsluiten(res, { c, b, akkoord }) {
   const o = await zoek(t, c);
   if (!o) return fail(res, 404, 'Deze verzamellink bestaat niet meer');
   if (/^(Betaald|Omzetten|Geleverd)/.test(o.Download || '')) return res.json({ status: o.Download });
-  const terug = beheerLink(c) + '&terug=1';
+  const terug = beheerLink(c) + '?terug=1';
   const p = await mollie('payments', { method: 'POST', body: JSON.stringify({
     amount: { currency: 'EUR', value: DOWNLOAD_PRIJS.toFixed(2) },
     description: `Download foto's ${voornaam(o)} [${c}]`.slice(0, 255),
