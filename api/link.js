@@ -306,12 +306,27 @@ async function omgezet(res, { job, aantal, fouten, zips }) {
   await drive(t, `files/${deelMap}/permissions`, { method: 'POST', body: JSON.stringify({ role: 'reader', type: 'anyone' }) });
   const drivelink = 'https://drive.google.com/drive/folders/' + deelMap;
   // Zips (één per film) delen; lukt dat, dan gaat de mail naar de downloadpagina, anders naar Drive.
+  // Zips in de eigen opslag (pad op de omzetserver) of, als terugval, als Drive-bestand.
   let zipsOk = 0;
+  const lijst = [];
   for (const z of (Array.isArray(zips) ? zips : []).slice(0, 6)) {
-    if (!z || !/^[\w-]{10,}$/.test(String(z.id || ''))) continue;
+    if (!z) continue;
+    const film = m.films.find((f) => f.nr === +z.nr) || { nr: +z.nr || 1, naam: z.naam || '' };
+    const naam = m.films.length > 1 ? `Film ${film.nr}` + (film.naam ? ' – ' + film.naam : '') : 'Alle foto’s en filmpjes';
+    if (/^\/zip\/[0-9a-f]{24}\/[^/?#]+\.zip$/.test(String(z.pad || ''))) { lijst.push({ naam, mb: Math.max(1, Math.round((+z.size || 0) / 1e6)), url: OMZET_URL.replace(/\/$/, '') + z.pad }); zipsOk++; continue; }
+    if (!/^[\w-]{10,}$/.test(String(z.id || ''))) continue;
     try { await drive(t, `files/${z.id}/permissions`, { method: 'POST', body: JSON.stringify({ role: 'reader', type: 'anyone' }) }); zipsOk++; }
     catch (e) { console.error('Zip delen', c, e); }
   }
+  // Links voor de downloadpagina bewaren in de map Downloads (wordt na 30 dagen opgeruimd).
+  if (lijst.length) try {
+    const map = await folder(t, DOWNLOADS, m.klant);
+    const grens = 'dl' + Date.now();
+    const body = `--${grens}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` + JSON.stringify({ name: 'links.json', parents: [map] }) +
+      `\r\n--${grens}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(lijst)}\r\n--${grens}--`;
+    const rr = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'multipart/related; boundary=' + grens }, body });
+    if (!rr.ok) throw new Error('links.json ' + rr.status);
+  } catch (e) { console.error('Downloadlinks bewaren', c, e); zipsOk -= lijst.length; }
   const link = zipsOk ? downloadLink(c) : drivelink;
   const n = Math.max(0, parseInt(aantal, 10) || 0), mis = (Array.isArray(fouten) ? fouten : []).slice(0, 20).map((x) => kort(x, 150));
   const partner = o.Partner || '';
@@ -418,7 +433,16 @@ async function downloadInfo(res, { c, d }) {
   const binnen = await submappen(t, klant);
   const map = (binnen[DOWNLOADS] || [])[0];
   const diashow = (binnen[DIASHOW] || [])[0];
-  const zips = map ? (await drive(t, 'files?pageSize=20&orderBy=name&fields=files(id,name,size,createdTime)&q=' + encodeURIComponent(`'${map}' in parents and trashed=false`))).files : [];
+  const alles = map ? (await drive(t, 'files?pageSize=20&orderBy=createdTime desc&fields=files(id,name,size,createdTime)&q=' + encodeURIComponent(`'${map}' in parents and trashed=false`))).files : [];
+  const json = alles.find((f) => f.name === 'links.json');
+  const zips = alles.filter((f) => /\.zip$/i.test(f.name)).sort((a, b) => a.name.localeCompare(b.name, 'nl', { numeric: true }));
+  if (json) {
+    // Zips in de eigen opslag: links staan in links.json.
+    let films = [];
+    try { films = await drive(t, `files/${json.id}?alt=media`); } catch (e) { console.error('links.json lezen', e); }
+    const tot = new Date(Date.parse(json.createdTime) + 30 * 864e5).toLocaleDateString('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'long' });
+    return res.json({ naam: voornaam(o), partner: o.Partner || '', tot, drive: diashow ? 'https://drive.google.com/drive/folders/' + diashow : '', films: Array.isArray(films) ? films : [] });
+  }
   if (!zips.length && !diashow) return verlopen();
   // Zonder zips (oudere leveringen): alleen de Drive-map.
   const tot = zips.length ? new Date(Date.parse(zips[0].createdTime) + 30 * 864e5).toLocaleDateString('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'long' }) : '';

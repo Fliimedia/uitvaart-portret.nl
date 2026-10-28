@@ -9,6 +9,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import sharp from 'sharp';
 import exifr from 'exifr';
 
@@ -16,6 +17,23 @@ const run = promisify(execFile);
 const W = 1920, H = 1080;
 const NR = [1, 2, 3, 4, 6, 9]; // prefix per vak: Jeugd, Jong volwassen, Gezin en werk, Later, Hobby en typisch, Weet ik niet
 const LATER = 3;
+const LABEL = ['Jeugd', 'Jong volwassen', 'Gezin en werk', 'Later', 'Hobby', 'Periode onbekend']; // in de bestandsnamen
+// Zips voor de downloadpagina in Google Cloud Storage (privé). De server geeft ze zelf door via /zip/<sleutel>/<naam>.zip;
+// de sleutel is lang en willekeurig. De bucket wist alles na 31 dagen (lifecycle).
+const BUCKET = process.env.ZIP_BUCKET || 'up-downloads-783697177718';
+async function gcsToken() {
+  const r = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', { headers: { 'Metadata-Flavor': 'Google' } });
+  if (!r.ok) throw new Error('Geen GCS-token ' + r.status);
+  return (await r.json()).access_token;
+}
+async function naarBucket(pad, object) {
+  const { size } = await fs.stat(pad);
+  const r = await fetch(`https://storage.googleapis.com/upload/storage/v1/b/${BUCKET}/o?uploadType=media&name=${encodeURIComponent(object)}`, {
+    method: 'POST', headers: { Authorization: 'Bearer ' + (await gcsToken()), 'Content-Type': 'application/zip', 'Content-Length': String(size) },
+    body: createReadStream(pad), duplex: 'half' });
+  if (!r.ok) throw new Error('Bucket ' + r.status + ': ' + (await r.text()).slice(0, 200));
+  return size;
+}
 
 // ---------- Omzetten ----------
 const isHeic = (f) => /^image\/hei[cf]/.test(f.mimeType) || /\.(heic|heif)$/i.test(f.name);
@@ -143,7 +161,7 @@ async function pool(items, n, fn) {
 // ---------- De opdracht ----------
 // Eén film: de vakken van die film ophalen, op volgorde zetten, omzetten en in zijn diashowmap zetten.
 // zipMap: als die er is, blijven de omgezette bestanden (en de muziek) daar staan voor de zip van deze film.
-async function verwerkFilm(d, tmp, film, fouten, zipMap) {
+async function verwerkFilm(d, tmp, film, fouten, zipMap, opdrachtNaam) {
   let aantal = 0;
   const MAP = 'application/vnd.google-apps.folder';
   for (const f of await d.lijst(film.diashow)) if (f.mimeType !== MAP) await d.weg(f.id); // opnieuw proberen: map eerst leeg
@@ -170,8 +188,9 @@ async function verwerkFilm(d, tmp, film, fouten, zipMap) {
   const portret = alles.filter((x) => !x.mis && /PORTRET/.test(x.f.name));
   const rest = perFase.map((l) => sorteer(l.filter((x) => !x.mis && !/PORTRET/.test(x.f.name))));
   let nr = 0;
-  const plan = [...portret.map((x) => ({ x, naam: '0-000 portret' })),
-    ...rest.flatMap((l, fi) => l.map((x) => ({ x, naam: NR[fi] + '-' + String(++nr).padStart(3, '0') })))];
+  // Namen: '001 portret', '002 Jeugd', … doorlopend genummerd, zodat sorteren op naam de volgorde geeft.
+  const plan = [...portret.map((x) => ({ x, naam: String(++nr).padStart(3, '0') + ' portret' })),
+    ...rest.flatMap((l, fi) => l.map((x) => ({ x, naam: String(++nr).padStart(3, '0') + ' ' + LABEL[fi] })))];
   // 3. Omzetten en terugzetten (foto's 3 tegelijk, video's 1 tegelijk)
   const doe = async ({ x, naam }) => {
     const vid = x.f.mimeType.startsWith('video/');
@@ -192,9 +211,20 @@ async function verwerkFilm(d, tmp, film, fouten, zipMap) {
     try { await d.kopieer(f.id, film.diashow, naam); } catch (e) { fouten.push(f.name); }
     if (zipMap) try { await d.haal(f.id, path.join(zipMap, naam.replace(/[\/\\]/g, '_'))); } catch (e) {}
   }
+  // Muziek die de familie alleen als titel of link opgaf: één leesbaar bestand (zonder interne codes).
+  const regels = [];
   for (const f of (await d.lijst(film.map)).filter((x) => x.name === 'MUZIEK.txt')) {
-    try { await d.kopieer(f.id, film.diashow, 'MUZIEK.txt'); } catch (e) {}
-    if (zipMap) try { await d.haal(f.id, path.join(zipMap, 'MUZIEK.txt')); } catch (e) {}
+    try {
+      const p = path.join(tmp, 'muziek-' + f.id + '.txt'); await d.haal(f.id, p);
+      const t = (await fs.readFile(p, 'utf8')).split('Muziek:')[1] || ''; await fs.rm(p, { force: true });
+      for (const x of t.split('\n').map((y) => y.trim()).filter(Boolean)) if (!/^Bestand: /.test(x) && !regels.includes(x)) regels.push(x);
+    } catch (e) {}
+  }
+  if (regels.length) {
+    const p = path.join(zipMap || tmp, 'Muziek – lees dit.txt');
+    await fs.writeFile(p, `Muziek voor de film${film.naam ? ' ' + film.naam : ''}${opdrachtNaam ? ' van ' + opdrachtNaam : ''}:\n\n${regels.map((x) => x.replace(/^\d+\.\s*/, '- ')).join('\n')}\n\nStaat er een link bij, dan gaat het om die uitvoering.\n`);
+    try { await d.zet(film.diashow, 'Muziek – lees dit.txt', 'text/plain', p); } catch (e) {}
+    if (!zipMap) await fs.rm(p, { force: true });
   }
   return aantal;
 }
@@ -216,15 +246,23 @@ export async function verwerk(o) {
       const veilig = label.replace(/[\/\\:*?"<>|]/g, ' ').trim();
       const zipMap = o.downloads ? path.join(tmp, 'zip-' + (film.nr || 1), veilig) : null;
       if (zipMap) await fs.mkdir(zipMap, { recursive: true });
-      aantal += await verwerkFilm(d, tmp, film, fouten, zipMap);
+      aantal += await verwerkFilm(d, tmp, film, fouten, zipMap, o.naam);
       if (!zipMap) continue;
       try {
         const zipNaam = ((o.naam ? o.naam + ' – ' : '') + veilig).replace(/[\/\\:*?"<>|]/g, ' ').trim() + '.zip';
         const zipPad = path.join(tmp, 'film-' + (film.nr || 1) + '.zip');
         await run('zip', ['-0', '-r', '-q', zipPad, veilig], { cwd: path.dirname(zipMap), maxBuffer: 1e7 });
         const { size } = await fs.stat(zipPad);
-        const id = await d.zet(o.downloads, zipNaam, 'application/zip', zipPad);
-        zips.push({ nr: film.nr || 1, naam: film.naam || '', id, size });
+        // Eerst de eigen opslag (geen tussenscherm van Google); lukt dat niet, dan als bestand in Drive.
+        try {
+          const sleutel = crypto.randomBytes(12).toString('hex');
+          await naarBucket(zipPad, sleutel + '/' + zipNaam);
+          zips.push({ nr: film.nr || 1, naam: film.naam || '', pad: '/zip/' + sleutel + '/' + encodeURIComponent(zipNaam), size });
+        } catch (e) {
+          console.error('Bucket mislukt, val terug op Drive', o.code, e.message);
+          const id = await d.zet(o.downloads, zipNaam, 'application/zip', zipPad);
+          zips.push({ nr: film.nr || 1, naam: film.naam || '', id, size });
+        }
         await fs.rm(path.dirname(zipMap), { recursive: true, force: true }); await fs.rm(zipPad, { force: true });
       } catch (e) { console.error('Zip mislukt', o.code, film.nr, e.message); }
     }
@@ -249,6 +287,26 @@ if (!process.env.OMZET_TEST) http.createServer(async (req, res) => {
     BEZIG.set(o.code, Date.now());
     res.writeHead(202).end('Bezig');
     verwerk(o).catch((e) => console.error('Opdracht mislukt', o.code, e)).finally(() => BEZIG.delete(o.code));
+    return;
+  }
+  // Download van een zip uit de bucket (doorgeven in stukken: geen limiet op de grootte).
+  const z = req.method === 'GET' && /^\/zip\/([0-9a-f]{24})\/([^/?#]+\.zip)$/.exec(req.url || '');
+  if (z) {
+    try {
+      const object = z[1] + '/' + decodeURIComponent(z[2]);
+      const g = await fetch(`https://storage.googleapis.com/storage/v1/b/${BUCKET}/o/${encodeURIComponent(object)}?alt=media`, { headers: { Authorization: 'Bearer ' + (await gcsToken()) } });
+      if (!g.ok) {
+        res.writeHead(g.status === 404 ? 404 : 502, { 'Content-Type': 'text/html; charset=utf-8' })
+          .end('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><body style="font-family:sans-serif;max-width:520px;margin:60px auto;padding:0 16px;line-height:1.5"><h2>Deze download is verlopen</h2><p>De bestanden worden na 30 dagen automatisch verwijderd. Nog nodig? Bel of app 06 18 42 48 58 of mail info@uitvaart-portret.nl.</p>');
+        return;
+      }
+      const naam = decodeURIComponent(z[2]);
+      const lengte = +g.headers.get('content-length') || 0;
+      res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${naam.replace(/[^\x20-\x7e]/g, '-').replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(naam)}`,
+        'Cache-Control': 'private, no-store', ...(lengte && lengte < 30e6 ? { 'Content-Length': String(lengte) } : {}) });
+      for await (const stuk of g.body) if (!res.write(stuk)) await new Promise((ok) => res.once('drain', ok));
+      res.end();
+    } catch (e) { console.error('Download', e.message); if (!res.headersSent) res.writeHead(502).end('Even niet beschikbaar'); else res.end(); }
     return;
   }
   res.writeHead(200, { 'Content-Type': 'text/plain' }).end('Omzetserver uitvaart-portret.nl');
