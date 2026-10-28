@@ -94,7 +94,7 @@ export default async function handler(req, res) {
     const { error } = await resend.emails.send({
       from: FROM,
       to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl',
-      subject: `Nieuwe aanvraag van ${naam}`,
+      subject: `🎬 Film · Nieuwe aanvraag van ${naam}`,
       text,
       html,
       ...(isMail ? { replyTo: contact } : {}),

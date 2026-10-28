@@ -68,7 +68,7 @@ uitvaart-portret.nl`;
         const d = o.Download || '';
         const vast = /^Omzetten \d{4}-/.test(d) && dagenGeleden(d.slice(9, 25)) > 0.125;
         if ((/^Betaald/.test(d) && !/ontbreekt/.test(d)) || vast) {
-          if (vast) await mail({ to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl', subject: `Omzetten lijkt vast te zitten: ${o.Code}`,
+          if (vast) await mail({ to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl', subject: `${o.Partner ? '🤝 Partner ' + o.Partner : '📂 Verzamellink'} · Omzetten lijkt vast te zitten: ${o.Code}`,
             text: `De download van ${o.Code} is betaald maar nog niet geleverd. Ik probeer het opnieuw; kijk anders in Google Cloud Run.`, html: mailHtml(`De download van ${o.Code} is betaald maar nog niet geleverd. Ik probeer het opnieuw; kijk anders in Google Cloud Run.`) });
           await startOmzetten(t, o); gedaan.omzet = (gedaan.omzet || 0) + 1;
         }
@@ -97,7 +97,7 @@ uitvaart-portret.nl`;
     const klaar = (await leads(t)).rijen.filter((l) => volgende(l) >= 2);
     if (klaar.length) {
       const tekst = `Er staan ${klaar.length} follow-up(s) aan uitvaartondernemers klaar:\n${klaar.map((l) => '- ' + l.Bedrijf + ' (mail ' + volgende(l) + ')').join('\n')}\n\nVersturen: https://uitvaart-portret.nl/beheer.html (tab Partners)`;
-      await mail({ to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl', subject: `${klaar.length} follow-up(s) klaar om te versturen`, text: tekst, html: mailHtml(tekst) });
+      await mail({ to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl', subject: `📣 Sales funnel · ${klaar.length} follow-up(s) klaar om te versturen`, text: tekst, html: mailHtml(tekst) });
       gedaan.followups = klaar.length;
     }
   } catch (e) { console.error('Partnerherinnering', e); }

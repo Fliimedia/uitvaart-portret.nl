@@ -1,6 +1,6 @@
 // Stuurt Daan een mail zodra een familie foto's heeft verstuurd, met een link naar de Drive-map.
 import { Resend } from 'resend';
-import { ROOT_NAME, rootMap, FASES, check, googleToken, folder, fail, nu, logVeilig, leesOpdrachten, isMail, mail as stuurMail, mailHtml, filmMappen } from './_lib.js';
+import { ROOT_NAME, rootMap, FASES, check, googleToken, folder, fail, nu, logVeilig, leesOpdrachten, isMail, mail as stuurMail, mailHtml, filmMappen, soort } from './_lib.js';
 
 const FROM = 'Uitvaart portret <info@uitvaart-portret.nl>';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -147,7 +147,7 @@ uitvaart-portret.nl`;
     const { error } = await resend.emails.send({
       from: FROM,
       to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl',
-      subject: `${zelf ? 'Verzamellink (zelf maken)' : "Foto's ontvangen"}: ${c} (${totaal})`,
+      subject: `${soort(o, c)} · Foto's ontvangen: ${(o && o.Naam) || c} (${totaal}${meer ? ', ' + films.length + ' films' : ''})`,
       text,
       html,
     });

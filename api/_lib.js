@@ -175,6 +175,13 @@ function mailHtml(tekst) {
     esc(tekst).replace(/(https:\/\/[^\s<]+)/g, '<a href="$1">$1</a>').replace(/\n/g, '<br>')}</div>`;
 }
 
+// Onderwerp van mails aan Daan: in één oogopslag welke lijn het is.
+function soort(o, code) {
+  const c = String(code || (o && o.Code) || '');
+  if (!c.startsWith('zelf-')) return '🎬 Film';
+  return o && o.Partner ? `🤝 Partner ${o.Partner}` : '📂 Verzamellink';
+}
+
 // ---- Film in Drive ----
 const FILMMAP = '5 Film';
 async function filmMap(token, code) {
@@ -243,9 +250,9 @@ uitvaart-portret.nl`;
   const wa = waNummer(order.Contact);
   const note = isMail(order.Contact) ? 'De downloadlink is automatisch gemaild.'
     : `Geen e-mailadres bekend: stuur de link zelf via WhatsApp: https://wa.me/${wa}?text=${encodeURIComponent(tekst)}`;
-  await mail({ to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl', subject: `Betaald en geleverd: ${code}`,
+  await mail({ to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl', subject: `🎬 Film · Betaald en geleverd: ${naam || code}`,
     text: `${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`, html: mailHtml(`${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`) });
 }
 
 export { ROOT_NAME, rootMap, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB, filmMapNaam, filmMappen, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
-  mail, mailHtml, isMail, waNummer, filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, lever };
+  mail, mailHtml, isMail, soort, waNummer, filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, lever };

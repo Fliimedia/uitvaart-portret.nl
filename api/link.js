@@ -3,7 +3,7 @@
 // - Verzamellink (zelf maken): aanvragen, status bekijken, afsluiten en betalen (€39), en de terugkoppeling van de omzetserver.
 import crypto from 'crypto';
 import { sign, check, fail, nu, nuIso, logVeilig, logOpdracht, isMail, mail, mailHtml, googleToken, drive, folder, rootMap,
-  leesOpdrachten, deel, mollie, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB } from './_lib.js';
+  leesOpdrachten, deel, mollie, soort, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB } from './_lib.js';
 
 const DAAN = () => process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl';
 const SITE = 'https://www.uitvaart-portret.nl';
@@ -103,7 +103,7 @@ uitvaart-portret.nl`;
     Aanvraag: nu() + (vanuitBeheer ? ' (verzamellink, door Daan)' : ' (verzamellink)'), Uploadlink: link, Pakket: 'Zelf maken' });
   if (!vanuitBeheer) try {
     const t = `Nieuwe verzamellink\n\nNaam: ${naam}\nVoor: ${voor || '-'}\nE-mail: ${email}\nDatum uitvaart: ${datum || '-'}\nCode: ${code}`;
-    await mail({ to: DAAN(), subject: `Verzamellink aangevraagd: ${naam}`, text: t, html: mailHtml(t), replyTo: email });
+    await mail({ to: DAAN(), subject: `📂 Verzamellink · Aangevraagd: ${naam}`, text: t, html: mailHtml(t), replyTo: email });
   } catch (e) { console.error('Melding verzamellink', e); }
   return { code, link, beheer };
 }
@@ -255,7 +255,7 @@ export async function startOmzetten(t, o, { opnieuw = false } = {}) {
   if (bezig && !opnieuw && muur(nuIso()) - muur(bezig[1]) < 20 * 60e3) return true;
   if (!OMZET_URL) {
     await logOpdracht(t, c, { Download: 'Betaald ' + nu() + ' – omzetserver nog niet ingesteld' });
-    await mail({ to: DAAN(), subject: `Download betaald, maar omzetserver ontbreekt: ${c}`, text: `Zet de foto's van ${c} handmatig klaar, of stel de omzetserver in.`,
+    await mail({ to: DAAN(), subject: `${soort(o)} · Download betaald, maar omzetserver ontbreekt: ${c}`, text: `Zet de foto's van ${c} handmatig klaar, of stel de omzetserver in.`,
       html: mailHtml(`Zet de foto's van ${c} handmatig klaar, of stel de omzetserver in.`) });
     return false;
   }
@@ -322,7 +322,7 @@ uitvaart-portret.nl`;
     'Drive-map': 'https://drive.google.com/drive/folders/' + m.klant });
   try {
     const d = `Download geleverd: ${c}\n${n} bestanden omgezet${mis.length ? '\nNiet omgezet:\n' + mis.join('\n') : ''}\n\nMap: https://drive.google.com/drive/folders/${m.klant}`;
-    await mail({ to: DAAN(), subject: `Download geleverd: ${c}`, text: d, html: mailHtml(d) });
+    await mail({ to: DAAN(), subject: `${soort(o)} · Download geleverd: ${voornaam(o) || c}`, text: d, html: mailHtml(d) });
   } catch (e) { console.error('Melding download', e); }
   res.json({ ok: true });
 }

@@ -14,7 +14,7 @@
   :root { --bg:#F3EEE6; --card:#FBF8F3; --line:#E2D9CC; --ink:#25292A; --muted:#4A4F4C; --green:#4B5A48; --gold:#B08A3E; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font-family:'Instrument Sans','Helvetica Neue',sans-serif; font-size:17px; line-height:1.55; }
-  main { max-width:880px; margin:0 auto; padding:32px 16px 140px; }
+  main { max-width:880px; margin:0 auto; padding:32px 16px 190px; }
   header img { height:34px; }
   h1, h2 { font-family:'Newsreader',Georgia,serif; font-weight:400; margin:0; }
   h1 { font-size:clamp(32px,6vw,46px); line-height:1.1; margin:28px 0 12px; }
@@ -71,6 +71,11 @@
   .films .naamrij input { height:44px; padding:0 14px; border:1px solid var(--line); border-radius:12px; font:inherit; font-size:16px; background:#fff; color:var(--ink); flex:1; min-width:180px; max-width:340px; }
   .films .plus { height:42px; padding:0 18px; border-radius:21px; border:1px dashed var(--green); background:transparent; color:var(--green); font:inherit; font-size:15px; font-weight:600; cursor:pointer; }
   .films .weg-film { border:0; background:none; color:#8A3B2E; cursor:pointer; font:inherit; font-size:14px; }
+  .vakstatus { display:inline-block; margin-left:10px; padding:2px 10px; border-radius:12px; font-family:'Instrument Sans','Helvetica Neue',sans-serif; font-size:13px; font-weight:600; vertical-align:middle; background:#ECE6DB; color:var(--muted); }
+  .vakstatus.vol { background:#DDE5DA; color:#2F3D2C; }
+  .vakken { max-width:880px; margin:0 auto 10px; display:flex; flex-wrap:wrap; gap:6px; }
+  .vakken button { border:1px solid var(--line); background:#fff; color:var(--muted); border-radius:14px; padding:3px 10px; font:inherit; font-size:13px; cursor:pointer; }
+  .vakken button.vol { background:#DDE5DA; border-color:#DDE5DA; color:#2F3D2C; font-weight:600; }
   .hidden { display:none !important; }
   .fout { color:#8A3B2E; }
   @media (max-width:520px) { .fase { padding:18px; } .send { padding:0 20px; } }
@@ -136,6 +141,7 @@
 </main>
 
 <div class="bar" id="bar">
+  <div class="vakken hidden" id="vakken" aria-label="Welke periodes hebben al foto's"></div>
   <div class="bar-in">
     <span class="telling" id="telling"><strong>0</strong> foto's · 60 inbegrepen</span>
     <button class="send" id="verstuur" disabled>Verstuur</button>
@@ -186,7 +192,8 @@
   FASES.forEach(([titel, hint], f) => {
     const sec = document.createElement('section');
     sec.className = 'fase';
-    sec.innerHTML = `<div class="fase-head"><div><h2>${titel}</h2><p>${hint}</p></div>
+    sec.id = 'vak' + f;
+    sec.innerHTML = `<div class="fase-head"><div><h2>${titel}<span class="vakstatus" id="vs${f}">Nog leeg</span></h2><p>${hint}</p></div>
       <span style="display:flex;flex-wrap:wrap;gap:8px"><label class="add">+ Foto's toevoegen<input type="file" multiple accept="image/*,video/*"></label>${MOBIEL ? '<label class="add licht">Papieren foto fotograferen<input type="file" accept="image/*" capture="environment" data-afdruk="1"></label>' : ''}</span></div>
       <div class="grid" id="grid${f}"></div>`;
     sec.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => { add(e.target.files, f, !!inp.dataset.afdruk); e.target.value = ''; }));
@@ -359,6 +366,14 @@
         grid.appendChild(d);
       });
     }
+    // Per vak zien of er al iets in zit (hoeft niet, maar zo vergeet je geen periode).
+    const KORT = ['Jeugd', 'Jong volwassen', 'Gezin en werk', 'Later', 'Hobby', 'Twijfel'];
+    const perVak = FASES.map((_, f) => items.filter(i => i.fase === f && i.film === films[huidig].nr).length);
+    perVak.forEach((k, f) => { const el = $('vs' + f); el.textContent = k ? '✓ ' + k : (f === 5 ? 'Mag leeg' : 'Nog leeg'); el.classList.toggle('vol', k > 0); });
+    const chips = $('vakken');
+    chips.classList.toggle('hidden', !items.length);
+    chips.innerHTML = perVak.slice(0, 5).map((k, f) => `<button type="button" data-f="${f}" class="${k ? 'vol' : ''}">${k ? '✓ ' : ''}${KORT[f]}</button>`).join('');
+    chips.querySelectorAll('button').forEach(btn => btn.onclick = () => $('vak' + btn.dataset.f).scrollIntoView({ behavior: 'smooth', block: 'start' }));
     const n = items.length, nf = items.filter(i => i.film === films[huidig].nr).length;
     $('telling').innerHTML = films.length > 1
       ? `<strong>${nf}</strong> in ${esc(filmNaam(films[huidig]))} · ${n} totaal` + (ZELF ? '' : ' · 60 per film inbegrepen')
@@ -512,7 +527,15 @@
     bewaar();
     const metFotos = films.filter(f => items.some(i => i.film === f.nr));
     const zonder = metFotos.filter(f => !f.portretId).map(filmNaam);
-    if (!ZELF && zonder.length && !confirm((films.length > 1 ? 'Nog geen portretfoto gekozen voor ' + zonder.join(', ') : 'U heeft nog geen portretfoto gekozen') + '. Toch versturen?')) return;
+    const PER = ['Jeugd', 'Jong volwassen', 'Gezin en werk', 'Later', 'Hobby, reizen, typisch'];
+    const leeg = metFotos.map(fm => {
+      const l = PER.filter((_, f) => !items.some(i => i.film === fm.nr && i.fase === f));
+      return l.length ? (films.length > 1 ? filmNaam(fm) + ': ' : '') + l.join(', ') : '';
+    }).filter(Boolean);
+    const vragen = [];
+    if (leeg.length) vragen.push('Nog leeg: ' + leeg.join('; ') + '. Dat mag, als er voor die periode geen foto\'s zijn.');
+    if (!ZELF && zonder.length) vragen.push(films.length > 1 ? 'Nog geen portretfoto gekozen voor ' + zonder.join(', ') + '.' : 'U heeft nog geen portretfoto gekozen.');
+    if (vragen.length && !confirm(vragen.join('\n\n') + '\n\nToch versturen?')) return;
     const jobs = [];
     $('verstuur').disabled = true;
     const NR = [1, 2, 3, 4, 6, 9];
