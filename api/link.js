@@ -170,8 +170,11 @@ async function afsluiten(res, { c, b, akkoord }) {
 }
 
 // Na betaling (vanuit de Mollie-webhook) of als vangnet (dagelijkse taak): de omzetserver aan het werk zetten.
-export async function startOmzetten(t, o) {
+export async function startOmzetten(t, o, { opnieuw = false } = {}) {
   const c = o.Code;
+  // Niet dubbel starten: loopt er al een omzetting van minder dan 20 minuten oud, dan niets doen.
+  const bezig = /^Omzetten (\d{4}-\d{2}-\d{2} \d{2}:\d{2})/.exec(o.Download || '');
+  if (bezig && !opnieuw && Date.now() - Date.parse(bezig[1].replace(' ', 'T') + ':00+01:00') < 20 * 60e3) return true;
   if (!OMZET_URL) {
     await logOpdracht(t, c, { Download: 'Betaald ' + nu() + ' – omzetserver nog niet ingesteld' });
     await mail({ to: DAAN(), subject: `Download betaald, maar omzetserver ontbreekt: ${c}`, text: `Zet de foto's van ${c} handmatig klaar, of stel de omzetserver in.`,
@@ -183,8 +186,12 @@ export async function startOmzetten(t, o) {
   const job = `${c}.${exp}.${sign('omzet:' + c + ':' + exp)}`;
   await logOpdracht(t, c, { Download: 'Omzetten ' + nuIso() });
   const r = await fetch(OMZET_URL.replace(/\/$/, '') + '/omzetten', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(45000),
     body: JSON.stringify({ job, code: c, ...m, terug: SITE + '/api/link' }),
+  }).catch((e) => {
+    // Opstarten van de server kan even duren; de opdracht is dan meestal wel aangekomen. Het vangnet van de dagtaak pakt het anders op.
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') return { ok: true, traag: true };
+    throw e;
   });
   if (!r.ok) throw new Error('Omzetserver ' + r.status + ': ' + (await r.text()).slice(0, 300));
   return true;
@@ -211,7 +218,9 @@ async function omgezet(res, { job, aantal, fouten }) {
   if (!o) return fail(res, 404, 'Onbekend');
   if (/^Geleverd/.test(o.Download || '')) return res.json({ ok: true });
   const m = await mappen(t, c);
-  const link = await deel(t, m.klant, true);
+  // Map delen: 'iedereen met de link mag bekijken' (copyRequiresWriterPermission werkt niet op mappen).
+  await drive(t, `files/${m.klant}/permissions`, { method: 'POST', body: JSON.stringify({ role: 'reader', type: 'anyone' }) });
+  const link = 'https://drive.google.com/drive/folders/' + m.klant;
   const n = Math.max(0, parseInt(aantal, 10) || 0), mis = (Array.isArray(fouten) ? fouten : []).slice(0, 20).map((x) => kort(x, 150));
   const tekst = `Beste ${voornaam(o)},
 

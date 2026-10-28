@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     if (b.actie === 'omzet') {
       if (!String(order.Code).startsWith('zelf-')) return fail(res, 400, 'Alleen voor verzamellinks');
       await logOpdracht(t, order.Code, { Download: 'Betaald ' + nu() + ' (handmatig vanuit beheer)' });
-      await startOmzetten(t, order);
+      await startOmzetten(t, order, { opnieuw: /^Geleverd/.test(order.Download || '') || !!b.opnieuw });
       return res.json({ ok: true, melding: 'Omzetten gestart. Binnen een paar minuten gaat de downloadmail naar ' + (order.Contact || 'de aanvrager') + '.' });
     }
 
