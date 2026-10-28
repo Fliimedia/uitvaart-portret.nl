@@ -80,11 +80,15 @@ Het aanbod staat nog: de eerste film voor een van jullie families maak ik kostel
 Hartelijke groet,
 Daan Lubbers
 06 18 42 48 58` },
-  3: { onderwerp: 'Laatste berichtje van mij', tekst: `{aanhef}
+  3: { onderwerp: 'Voor de families die iets meer willen dan een diashow', tekst: `{aanhef}
 
-Ik wil je niet blijven mailen, dus dit is mijn laatste berichtje.
+Dit is mijn laatste berichtje, beloofd.
 
-Vraagt een familie ooit naar een fotofilm of fotopresentatie, dan ben je altijd welkom om me te bellen: 06 18 42 48 58. Ook als het snel moet, en de eerste film blijft kosteloos.
+Van collega's van jullie hoor ik dat een gewone diashow prima lukt: foto's op muziek, klaar. Daar heb je mij ook niet voor nodig.
+
+Maar soms wil een familie iets meer. Oude filmpjes en telefoonvideo's tussen de foto's, een film met een verhaal en opbouw, gemonteerd op de muziek. Dat is precies mijn vak als televisiemaker. De familie stuurt alles vanaf de telefoon via een persoonlijke link; voor de muziek is een titel genoeg. Ik lever een mp4 op tijd voor de deadline van de locatie, zodat jullie hem zelf in het systeem van de locatie zetten. Jullie blijven het aanspreekpunt.
+
+Komt zo'n familie langs? Bel of app me gerust: 06 18 42 48 58. De eerste film blijft kosteloos.
 
 Dank voor het lezen, en veel goeds gewenst.
 Daan Lubbers` },
