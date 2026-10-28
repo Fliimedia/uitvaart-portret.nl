@@ -2,7 +2,7 @@
 import crypto from 'crypto';
 import {
   fail, googleToken, nu, logOpdracht, leesOpdrachten, mail, mailHtml, isMail, waNummer,
-  filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, DOWNLOAD_PRIJS,
+  filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, DOWNLOAD_PRIJS, EXTRA_FILM_VERZAMEL,
 } from './_lib.js';
 import { startOmzetten, beheerLink, maakPartnerlink, maakConsumentlink } from './link.js';
 
@@ -93,9 +93,13 @@ Bent u tevreden? Laat het me dan ook even weten. U ontvangt daarna de betaallink
     if (b.actie === 'betaal') {
       if (!process.env.MOLLIE_API_KEY) return fail(res, 500, 'MOLLIE_API_KEY ontbreekt in Vercel');
       const extraFotos = parseInt(order["Extra foto's (boven 60)"], 10) || 0;
-      const { regels, totaal } = berekenBedrag({ pakket: b.pakket, spoed: b.spoed, extraFotos,
+      // Meerdere films: aantal uit de kolom Films (te overschrijven in beheer). Elke extra film = 60% van het pakket.
+      const nFilms = order.Films ? order.Films.split(' | ').length : 1;
+      const extraFilms = b.extraFilms !== undefined && b.extraFilms !== '' ? parseInt(b.extraFilms, 10) || 0 : nFilms - 1;
+      const download = Math.round((DOWNLOAD_PRIJS + EXTRA_FILM_VERZAMEL * (nFilms - 1)) * 100) / 100;
+      const { regels, totaal } = berekenBedrag({ pakket: b.pakket, spoed: b.spoed, extraFotos, extraFilms,
         extraRondes: parseInt(b.extraRondes, 10) || 0, korteVersie: !!b.korteVersie,
-        verrekend: !order.Partner && /^(Betaald|Omzetten|Geleverd)/.test(order.Download || '') ? DOWNLOAD_PRIJS : 0 });
+        verrekend: !order.Partner && /^(Betaald|Omzetten|Geleverd)/.test(order.Download || '') ? download : 0 });
       if (!totaal) return fail(res, 400, 'Kies een pakket');
       const pl = await mollie('payment-links', { method: 'POST', body: JSON.stringify({
         description: `Fotofilm ${naam} [${order.Code}]`.slice(0, 255),
@@ -105,7 +109,7 @@ Bent u tevreden? Laat het me dan ook even weten. U ontvangt daarna de betaallink
       }) });
       const href = pl._links && pl._links.paymentLink && pl._links.paymentLink.href;
       if (!href) throw new Error('Geen betaallink van Mollie: ' + JSON.stringify(pl));
-      const spec = regels.map(([k, v]) => `- ${k}: €${v}`).join('\n');
+      const spec = regels.map(([k, v]) => `- ${k}: €${Number.isInteger(v) ? v : v.toFixed(2).replace('.', ',')}`).join('\n');
       const tekst = `Beste ${naam},
 
 Fijn dat u tevreden bent met de film. U kunt betalen via deze link:

@@ -124,11 +124,13 @@
     $('laden').classList.add('hidden'); $('pagina').classList.remove('hidden');
     $('titel').textContent = 'Uw verzameling' + (j.naam ? ', ' + j.naam : '');
     if (j.datum) $('sub').textContent = 'Hier ziet u wat de familie heeft aangeleverd. Uitvaart: ' + j.datum + '. Deze pagina is alleen voor u.';
-    $('prijs').textContent = '€' + j.prijs;
+    const prijs = j.prijsTekst || '€' + j.prijs, meer = (j.films || []).length > 1;
+    $('prijs').textContent = prijs + (meer && !j.partner ? ` (${j.films.length} films: €29 + €9,99 per extra film)` : '');
     $('zelf-upload').href = j.uploadlink;
     let f = 0, v = 0;
-    $('tabel').innerHTML = j.perFase.map((p) => { f += p.fotos; v += p.videos;
-      return `<tr><td>${esc(p.naam)}</td><td class="n">${p.fotos}</td><td class="n">${p.videos}</td></tr>`; }).join('') +
+    // Meerdere films (bijv. familie, vrienden, werk): per film een regel; anders per periode.
+    $('tabel').innerHTML = (meer ? j.films : j.perFase).map((p) => { f += p.fotos; v += p.videos;
+      return `<tr><td>${meer ? '<strong>' + esc(p.naam) + '</strong>' : esc(p.naam)}</td><td class="n">${p.fotos}</td><td class="n">${p.videos}</td></tr>`; }).join('') +
       `<tr><td><strong>Totaal</strong></td><td class="n"><strong>${f}</strong></td><td class="n"><strong>${v}</strong></td></tr>`;
     $('muziek').textContent = j.muziek ? 'Muziek: ' + j.muziek + (j.muziekBestanden ? ` (${j.muziekBestanden} bestand${j.muziekBestanden === 1 ? '' : 'en'})` : '')
       : j.muziekBestanden ? `Muziek: ${j.muziekBestanden} bestand${j.muziekBestanden === 1 ? '' : 'en'}` : 'Er is nog geen muziek doorgegeven.';
@@ -148,7 +150,7 @@
       $('betaal').textContent = f + v === 0 ? 'Nog niets binnen' : 'Iedereen is klaar: afronden';
     } else {
       $('betaal').disabled = !$('akkoord').checked || f + v === 0;
-      $('betaal').textContent = f + v === 0 ? 'Nog niets binnen' : `Iedereen is klaar: afronden en betalen (€${j.prijs})`;
+      $('betaal').textContent = f + v === 0 ? 'Nog niets binnen' : `Iedereen is klaar: afronden en betalen (${prijs})`;
     }
     const t = encodeURIComponent('Hallo Daan, wil jij de film maken? Mijn verzamellink: ' + c);
     $('wa').href = 'https://wa.me/31618424858?text=' + t; $('ml').href = 'mailto:info@uitvaart-portret.nl?subject=Film%20laten%20maken&body=' + t;

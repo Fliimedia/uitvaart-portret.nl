@@ -62,6 +62,15 @@
   .akkoord { display:flex; gap:12px; align-items:flex-start; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; margin:8px 0 0; font-size:16px; cursor:pointer; }
   .akkoord input { width:22px; height:22px; margin:2px 0 0; flex-shrink:0; accent-color:var(--green); }
   .akkoord a { color:var(--green); }
+  .films { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:16px 20px; margin-bottom:18px; font-size:15px; color:var(--muted); }
+  .films .tabs { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .films .tab { height:42px; padding:0 18px; border-radius:21px; border:1px solid var(--green); background:transparent; color:var(--green); font:inherit; font-size:15px; font-weight:600; cursor:pointer; }
+  .films .tab[aria-current="true"] { background:var(--green); color:#fff; }
+  .films .tab small { font-weight:400; opacity:.85; }
+  .films .naamrij { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:12px; }
+  .films .naamrij input { height:44px; padding:0 14px; border:1px solid var(--line); border-radius:12px; font:inherit; font-size:16px; background:#fff; color:var(--ink); flex:1; min-width:180px; max-width:340px; }
+  .films .plus { height:42px; padding:0 18px; border-radius:21px; border:1px dashed var(--green); background:transparent; color:var(--green); font:inherit; font-size:15px; font-weight:600; cursor:pointer; }
+  .films .weg-film { border:0; background:none; color:#8A3B2E; cursor:pointer; font:inherit; font-size:14px; }
   .hidden { display:none !important; }
   .fout { color:#8A3B2E; }
   @media (max-width:520px) { .fase { padding:18px; } .send { padding:0 20px; } }
@@ -88,9 +97,11 @@
       <li>Vul onderaan de <strong>muziek</strong> in.</li>
       <li>Tik onderaan op <strong>Verstuur</strong>.</li>
     </ol>
+    <div id="films" class="films"></div>
     <div id="fases"></div>
     <section class="fase" id="muziek">
       <div class="fase-head"><div><h2>Muziek</h2><p>Welk nummer moet onder de film? Noem de titel en de artiest. Gaat het om een bepaalde uitvoering (live, een koor, een eigen opname), plak dan de link of voeg het bestand toe.</p></div></div>
+      <p id="muziek-al" class="muziek-al hidden"></p>
       <div id="nummers"></div>
       <div class="muziek-acties">
         <button type="button" class="add licht" id="nummer-plus">+ Nog een nummer</button>
@@ -149,7 +160,11 @@
   const $ = id => document.getElementById(id);
   if (!c || !s) { $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); return; }
 
-  let akkoordTijd = null, items = [], portretId = null, nextId = 1, busy = false, failed = [];
+  let akkoordTijd = null, items = [], portretId = null, nextId = 1, busy = false, failed = [], partner = '';
+  // Meerdere films per opdracht (bijv. familie, vrienden, werk). Elke film heeft eigen foto's, portret en muziek.
+  const MAXFILMS = 5;
+  const nieuweFilm = (nr, naam = '', vast = false) => ({ nr, naam, vast, nummers: [{ titel: '', link: '' }], muziekFiles: [], muziekAl: '', portretId: null });
+  let films = [nieuweFilm(1)], huidig = 0;
   // Verzamellink (zelf maken): geen akkoord of betaling hier; de aanvrager rondt af op verzamel.html.
   const ZELF = c.startsWith('zelf-');
   if (ZELF) {
@@ -186,8 +201,9 @@
       const mime = file.type || extMime(file.name);
       if (!/^(image|video)\//.test(mime)) continue;
       // Precies hetzelfde bestand nog een keer (zelfde naam en grootte): niet dubbel toevoegen.
-      if (items.some(x => x.file.name === file.name && x.file.size === file.size)) continue;
-      const i = { id: nextId++, file, mime, fase, star: false, afdruk: !!afdruk, url: URL.createObjectURL(file) };
+      const film = films[huidig].nr;
+      if (items.some(x => x.film === film && x.file.name === file.name && x.file.size === file.size)) continue;
+      const i = { id: nextId++, file, mime, fase, film, star: false, afdruk: !!afdruk, url: URL.createObjectURL(file) };
       items.push(i);
       if (mime.startsWith('image/')) vingerafdruk(i);
     }
@@ -219,6 +235,7 @@
       const h = items.filter(x => x.hash);
       h.forEach(x => x.dubbel = false);
       for (let a = 0; a < h.length; a++) for (let b = a + 1; b < h.length; b++) {
+        if (h[a].film !== h[b].film) continue;
         let d = 0; for (let k = 0; k < 64 && d <= 6; k++) d += h[a].hash[k] !== h[b].hash[k];
         if (d <= 6) { h[a].dubbel = h[b].dubbel = true; }
       }
@@ -268,7 +285,50 @@
     $('muziek-bestanden').querySelectorAll('button').forEach(btn => btn.onclick = () => { muziekFiles.splice(+btn.dataset.k, 1); tekenNummers(); render(); });
   }
   let muziekAl = '';
-  function muziekOk() { return !!muziekAl || muziekFiles.length > 0 || nummers.some(m => m.titel.trim().length > 1); }
+  const muziekOkF = f => !!f.muziekAl || f.muziekFiles.length > 0 || f.nummers.some(m => m.titel.trim().length > 1);
+  function muziekOk() { bewaar(); return films.every(f => !items.some(i => i.film === f.nr) || muziekOkF(f)); }
+  function tekenMuziekAl() {
+    const p = $('muziek-al'); p.classList.toggle('hidden', !muziekAl);
+    p.textContent = 'De muziek is al doorgegeven: ' + muziekAl + '. U hoeft hier niets in te vullen, maar mag wel iets toevoegen.';
+  }
+
+  // --- Films (tabbladen) ---
+  const filmNaam = f => f.naam.trim() || 'Film ' + f.nr;
+  function bewaar() { Object.assign(films[huidig], { nummers, muziekFiles, muziekAl, portretId }); }
+  function kies(k) {
+    bewaar(); huidig = k;
+    ({ nummers, muziekFiles, muziekAl, portretId } = films[k]);
+    tekenNummers(); tekenMuziekAl(); tekenFilms(); render();
+  }
+  function prijsZin() {
+    if (partner) return '';
+    return ZELF ? ' Elke extra film kost €9,99.' : ' Een extra film kost 60% van de pakketprijs.';
+  }
+  function tekenFilms() {
+    const box = $('films');
+    $('muziek').querySelector('h2').textContent = films.length > 1 ? 'Muziek voor ' + filmNaam(films[huidig]) : 'Muziek';
+    const plus = films.length < MAXFILMS ? '<button type="button" class="plus" id="film-plus">+ Nog een film</button>' : '';
+    if (films.length === 1) {
+      box.innerHTML = `<div class="tabs">${plus}<span>Meer dan één film nodig, bijvoorbeeld een aparte voor vrienden of werk?${prijsZin()}</span></div>`;
+    } else {
+      const f = films[huidig];
+      const aantal = g => items.filter(i => i.film === g.nr).length;
+      box.innerHTML = `<div class="tabs">${films.map((g, k) => `<button type="button" class="tab" data-k="${k}" aria-current="${k === huidig}">${esc(filmNaam(g))} <small>(${aantal(g)})</small></button>`).join('')}${plus}</div>
+        <div class="naamrij"><label for="film-naam">Naam van deze film</label>
+          <input id="film-naam" maxlength="40" placeholder="${f.nr === 1 ? 'Bijv. Familie' : 'Bijv. Vrienden of Werk'}" ${f.vast ? 'disabled' : ''}>
+          ${!f.vast && f.nr === films[films.length - 1].nr && f.nr > 1 ? '<button type="button" class="weg-film" id="film-weg">Deze film weghalen</button>' : ''}</div>
+        <span style="display:block;margin-top:8px">U zet nu foto's klaar voor <strong id="film-nu">${esc(filmNaam(f))}</strong>. Elke film krijgt eigen foto's, een eigen portretfoto en eigen muziek.${prijsZin()}</span>`;
+      const inp = $('film-naam'); inp.value = f.naam;
+      inp.oninput = () => { f.naam = inp.value; const t = box.querySelector(`.tab[data-k="${huidig}"]`); if (t) t.firstChild.textContent = filmNaam(f) + ' '; $('film-nu').textContent = filmNaam(f); $('muziek').querySelector('h2').textContent = 'Muziek voor ' + filmNaam(f); };
+      box.querySelectorAll('.tab').forEach(t => t.onclick = () => kies(+t.dataset.k));
+      if ($('film-weg')) $('film-weg').onclick = () => { films.splice(huidig, 1); huidig = Math.max(0, huidig - 1); ({ nummers, muziekFiles, muziekAl, portretId } = films[huidig]); tekenNummers(); tekenMuziekAl(); tekenFilms(); render(); };
+    }
+    if ($('film-plus')) $('film-plus').onclick = () => {
+      bewaar(); films.push(nieuweFilm(Math.max(...films.map(g => g.nr)) + 1)); kies(films.length - 1);
+      const inp = $('film-naam'); if (inp) inp.focus();
+    };
+  }
+  const esc = t => String(t).replace(/[<>&"]/g, ch => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[ch]));
   $('nummer-plus').onclick = () => { if (nummers.length < 5) { nummers.push({ titel: '', link: '' }); tekenNummers(); } };
   $('muziek-file').onchange = (e) => { muziekFiles.push(...[...e.target.files].slice(0, 5)); e.target.value = ''; tekenNummers(); render(); };
   tekenNummers();
@@ -277,7 +337,7 @@
     for (let f = 0; f < FASES.length; f++) {
       const grid = $('grid' + f);
       grid.innerHTML = '';
-      items.filter(i => i.fase === f).forEach(i => {
+      items.filter(i => i.fase === f && i.film === films[huidig].nr).forEach(i => {
         const d = document.createElement('div');
         d.className = 'thumb' + (i.id === portretId ? ' portret' : '') + (i.dubbel ? ' dubbel' : '');
         const media = i.mime.startsWith('image/')
@@ -297,11 +357,18 @@
         grid.appendChild(d);
       });
     }
-    const n = items.length;
-    $('telling').innerHTML = `<strong>${n}</strong> ${n === 1 ? 'foto' : "foto's"}` + (ZELF ? '' : ' · 60 inbegrepen' + (n > 60 ? ` · ${n - 60} extra` : ''));
+    const n = items.length, nf = items.filter(i => i.film === films[huidig].nr).length;
+    $('telling').innerHTML = films.length > 1
+      ? `<strong>${nf}</strong> in ${esc(filmNaam(films[huidig]))} · ${n} totaal` + (ZELF ? '' : ' · 60 per film inbegrepen')
+      : `<strong>${n}</strong> ${n === 1 ? 'foto' : "foto's"}` + (ZELF ? '' : ' · 60 inbegrepen' + (n > 60 ? ` · ${n - 60} extra` : ''));
     const mOk = muziekOk();
     $('verstuur').disabled = n === 0 || busy || !$('akkoord').checked || !mOk;
-    if (n > 0 && !mOk) $('telling').innerHTML += ' · <span style="color:#8A3B2E">vul de muziek in</span>';
+    if (n > 0 && !mOk) {
+      const mist = films.filter(f => items.some(i => i.film === f.nr) && !muziekOkF(f)).map(filmNaam);
+      $('telling').innerHTML += ` · <span style="color:#8A3B2E">vul de muziek in${films.length > 1 ? ' voor ' + esc(mist.join(', ')) : ''}</span>`;
+    }
+    if ($('film-weg')) $('film-weg').classList.toggle('hidden', nf > 0); // alleen een lege film kan weg
+    if (films.length > 1) document.querySelectorAll('#films .tab small').forEach((el, k) => { el.textContent = '(' + items.filter(i => i.film === films[k].nr).length + ')'; });
     if (n > 0 && !$('akkoord').checked) $('telling').innerHTML += ' · <span style="color:#8A3B2E">vink onderaan het akkoord aan</span>';
   }
 
@@ -324,7 +391,7 @@
     });
   }
 
-  let folders = null;
+  let folders = null; const mapjes = {}; // mapjes[filmnr] = ondertekende vakmappen
 
   // Link delen met familie (deelmenu op telefoon, anders WhatsApp).
   document.querySelectorAll('.deel-knop').forEach(btn => btn.onclick = () => {
@@ -335,14 +402,17 @@
 
   // Status ophalen: heeft een familielid al muziek en akkoord doorgegeven?
   post('/api/prepare', { c, s }).then(r => {
-    if (r && r.folders) folders = r.folders;
+    if (r && r.folders) folders = mapjes[1] = r.folders;
     const e = (r && r.eerder) || {};
-    if (e.muziek) {
-      muziekAl = e.muziek;
-      const p = document.createElement('p'); p.className = 'muziek-al';
-      p.textContent = 'De muziek is al doorgegeven: ' + e.muziek + '. U hoeft hier niets in te vullen, maar mag wel iets toevoegen.';
-      $('nummers').before(p);
-    }
+    partner = ZELF ? e.partner || '' : '';
+    // Eerder aangemaakte films (door een ander familielid) staan direct klaar als tabblad.
+    (r.films || []).forEach(g => {
+      if (g.nr === 1) { films[0].naam = films[0].naam || g.naam || ''; films[0].muziekAl = g.muziek || ''; films[0].vast = !!g.naam; return; }
+      if (!films.some(x => x.nr === g.nr)) films.push(Object.assign(nieuweFilm(g.nr, g.naam, true), { muziekAl: g.muziek || '' }));
+    });
+    films.sort((a, b) => a.nr - b.nr);
+    if (!(r.films || []).length && e.muziek) films[0].muziekAl = e.muziek;
+    ({ muziekAl } = films[huidig]); tekenMuziekAl(); tekenFilms();
     if (ZELF && e.partner) {
       // Partnerlink: de uitvaartbegeleider is het aanspreekpunt; geen aanbod van Daan aan de familie.
       document.querySelectorAll('.zelf-upsell').forEach(el => el.classList.add('hidden'));
@@ -372,7 +442,10 @@
     window.onbeforeunload = () => 'Het versturen is nog bezig.';
     failed = []; const gelukt = [];
     try {
-      if (!folders) folders = (await post('/api/prepare', { c, s })).folders;
+      if (!folders) folders = mapjes[1] = (await post('/api/prepare', { c, s })).folders;
+      for (const nr of [...new Set(jobs.map(j => j.film))]) {
+        if (!mapjes[nr]) mapjes[nr] = (await post('/api/prepare', { c, s, film: nr, naam: (films.find(f => f.nr === nr) || {}).naam || '' })).folders;
+      }
     } catch (e) {
       failed = jobs; return finish(e.message);
     }
@@ -395,7 +468,7 @@
         }
         for (let poging = 0; poging < 3 && !ok; poging++) {
           try {
-            const f = folders[job.fase];
+            const f = mapjes[job.film || 1][job.fase];
             const { url } = await post('/api/start', { c, s, folder: f.id, fsig: f.sig, name: job.name, mime: job.mime, size: job.file.size });
             await put(url, job, b => { loaded.set(job, b); show(); });
             ok = true;
@@ -409,11 +482,18 @@
     await Promise.all([worker(), worker(), worker()]);
     // Melding aan Daan (loopt door op de achtergrond; een fout hier raakt de klant niet).
     if (gelukt.length) {
-      const perFase = FASES.map(() => 0); gelukt.filter(j => !j.audio && !j.extra).forEach(j => perFase[j.fase]++);
+      bewaar();
+      const perFilm = films.filter(f => gelukt.some(j => j.film === f.nr)).map(f => {
+        const g = gelukt.filter(j => j.film === f.nr);
+        const perFase = FASES.map(() => 0); g.filter(j => !j.audio && !j.extra).forEach(j => perFase[j.fase]++);
+        return { nr: f.nr, naam: f.naam.trim(), perFase, ster: g.filter(j => j.name.includes('★')).length, portret: g.some(j => j.name.includes('PORTRET')),
+          muziek: f.nummers.filter(m => m.titel.trim() || m.link.trim()), muziekBestanden: g.filter(j => j.audio).map(j => j.file.name) };
+      });
+      const perFase = FASES.map((_, k) => perFilm.reduce((a, f) => a + f.perFase[k], 0));
       fetch('/api/klaar', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ c, s, perFase, ster: gelukt.filter(j => j.name.includes('★')).length,
-          portret: gelukt.some(j => j.name.includes('PORTRET')), mislukt: failed.length, akkoord: akkoordTijd,
-          muziek: nummers.filter(m => m.titel.trim() || m.link.trim()), muziekBestanden: gelukt.filter(j => j.audio).map(j => j.file.name) }) }).catch(() => {});
+        body: JSON.stringify({ c, s, perFase, ster: perFilm.reduce((a, f) => a + f.ster, 0), portret: perFilm.some(f => f.portret),
+          mislukt: failed.length, akkoord: akkoordTijd, films: perFilm, aantalFilms: films.length,
+          muziek: (perFilm.find(f => f.nr === 1) || { muziek: [] }).muziek, muziekBestanden: (perFilm.find(f => f.nr === 1) || { muziekBestanden: [] }).muziekBestanden }) }).catch(() => {});
     }
     finish();
   }
@@ -427,23 +507,28 @@
   }
 
   $('verstuur').onclick = async () => {
-    if (!ZELF && !portretId && !confirm('U heeft nog geen portretfoto gekozen. Toch versturen?')) return;
+    bewaar();
+    const metFotos = films.filter(f => items.some(i => i.film === f.nr));
+    const zonder = metFotos.filter(f => !f.portretId).map(filmNaam);
+    if (!ZELF && zonder.length && !confirm((films.length > 1 ? 'Nog geen portretfoto gekozen voor ' + zonder.join(', ') : 'U heeft nog geen portretfoto gekozen') + '. Toch versturen?')) return;
     const jobs = [];
     $('verstuur').disabled = true;
     const NR = [1, 2, 3, 4, 6, 9];
-    for (let f = 0; f < FASES.length; f++) {
-      (await sorteerOpDatum(items.filter(i => i.fase === f))).forEach((i, n) => {
-        const tags = (i.star ? ' ★' : '') + (i.id === portretId ? ' PORTRET' : '') + (i.afdruk ? ' AFDRUK' : '');
-        const nr = String(n + 1).padStart(ZELF ? 3 : 2, '0');
-        jobs.push({ file: i.file, mime: i.mime, fase: f, name: (ZELF ? NR[f] + '-' + nr : nr) + tags + ' - ' + i.file.name });
-      });
+    for (const fm of metFotos) {
+      for (let f = 0; f < FASES.length; f++) {
+        (await sorteerOpDatum(items.filter(i => i.fase === f && i.film === fm.nr))).forEach((i, n) => {
+          const tags = (i.star ? ' ★' : '') + (i.id === fm.portretId ? ' PORTRET' : '') + (i.afdruk ? ' AFDRUK' : '');
+          const nr = String(n + 1).padStart(ZELF ? 3 : 2, '0');
+          jobs.push({ file: i.file, mime: i.mime, fase: f, film: fm.nr, name: (ZELF ? NR[f] + '-' + nr : nr) + tags + ' - ' + i.file.name });
+        });
+      }
+      fm.muziekFiles.forEach((file, k) => jobs.push({ file, mime: file.type || 'audio/mpeg', fase: 0, film: fm.nr, audio: true, name: 'MUZIEK ' + (k + 1) + ' - ' + file.name }));
     }
-    muziekFiles.forEach((file, k) => jobs.push({ file, mime: file.type || 'audio/mpeg', fase: 0, audio: true, name: 'MUZIEK ' + (k + 1) + ' - ' + file.name }));
     upload(jobs);
   };
   $('akkoord').onchange = () => { akkoordTijd = $('akkoord').checked ? new Date().toISOString() : null; render(); };
   $('opnieuw').onclick = () => upload(failed.slice());
-  render();
+  tekenFilms(); render();
 })();
 </script>
 </body>

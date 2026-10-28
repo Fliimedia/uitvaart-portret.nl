@@ -3,7 +3,7 @@
 // - Verzamellink (zelf maken): aanvragen, status bekijken, afsluiten en betalen (€29), en de terugkoppeling van de omzetserver.
 import crypto from 'crypto';
 import { sign, check, fail, nu, nuIso, logVeilig, logOpdracht, isMail, mail, mailHtml, googleToken, drive, folder, rootMap,
-  leesOpdrachten, deel, mollie, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL } from './_lib.js';
+  leesOpdrachten, deel, mollie, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, filmMappen } from './_lib.js';
 
 const DAAN = () => process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl';
 const SITE = 'https://www.uitvaart-portret.nl';
@@ -132,30 +132,47 @@ uitvaart-portret.nl`;
 // ---- 2. Beheerpagina: wat is er binnen? ----
 async function zoek(t, c) { return (await leesOpdrachten(t)).find((o) => o.Code === c) || null; }
 
-async function mappen(t, c) {
+// Film 1 = de vakken in de klantmap; film 2+ = submappen 'Film n – naam'. Bij meer films krijgt elke film
+// in 'Klaar voor diashow' een eigen map. fases/diashow blijven die van film 1 (voor oude aanroepen).
+async function mappen(t, c, o) {
   const klant = await folder(t, c, await rootMap(t));
-  const fases = [];
-  for (const naam of FASES) fases.push({ naam, id: await folder(t, naam, klant) });
-  return { klant, fases, diashow: await folder(t, DIASHOW, klant) };
+  const vakken = async (ouder) => { const r = []; for (const naam of FASES) r.push({ naam, id: await folder(t, naam, ouder) }); return r; };
+  const fases = await vakken(klant);
+  const diashow = await folder(t, DIASHOW, klant);
+  const n1 = String((o && o.Films) || '').split(' | ')[0].trim();
+  const films = [{ nr: 1, naam: /^Film \d+$/.test(n1) ? '' : n1, map: klant, fases }];
+  for (const f of await filmMappen(t, klant)) films.push({ nr: f.nr, naam: f.naam, map: f.id, fases: await vakken(f.id) });
+  if (films.length > 1) for (const f of films) f.diashow = await folder(t, `Film ${f.nr}` + (f.naam ? ' – ' + f.naam : ''), diashow);
+  else films[0].diashow = diashow;
+  return { klant, fases, diashow, films };
 }
+const filmLabel = (f) => f.naam || 'Film ' + f.nr;
+// Download bij de verzamellink: €29, plus €9,99 per extra film.
+const downloadPrijs = (n) => Math.round((DOWNLOAD_PRIJS + EXTRA_FILM_VERZAMEL * Math.max(0, n - 1)) * 100) / 100;
+const euro = (x) => '€' + (Number.isInteger(x) ? String(x) : x.toFixed(2).replace('.', ','));
 
 async function status(res, { c, b }) {
   if (!String(c).startsWith('zelf-') || !check('beheer:' + c, b)) return fail(res, 403, 'Deze beheerlink klopt niet');
   const t = await googleToken();
   const o = await zoek(t, c);
   if (!o) return fail(res, 404, 'Deze verzamellink bestaat niet meer');
-  const m = await mappen(t, c);
-  const perFase = [];
+  const m = await mappen(t, c, o);
+  const perFase = FASES.map((naam) => ({ naam: naam.replace(/^\d+\s*/, ''), fotos: 0, videos: 0 }));
+  const films = [];
   let muziekBestanden = 0;
-  for (const f of m.fases) {
-    const files = (await drive(t, 'files?pageSize=1000&fields=files(mimeType)&q=' + encodeURIComponent(`'${f.id}' in parents and trashed=false`))).files;
-    const audio = files.filter((x) => x.mimeType.startsWith('audio/')).length;
-    muziekBestanden += audio;
-    perFase.push({ naam: f.naam.replace(/^\d+\s*/, ''), fotos: files.filter((x) => x.mimeType.startsWith('image/')).length,
-      videos: files.filter((x) => x.mimeType.startsWith('video/')).length });
+  for (const film of m.films) {
+    const tel = { naam: filmLabel(film), fotos: 0, videos: 0 };
+    for (const [k, f] of film.fases.entries()) {
+      const files = (await drive(t, 'files?pageSize=1000&fields=files(mimeType)&q=' + encodeURIComponent(`'${f.id}' in parents and trashed=false`))).files;
+      muziekBestanden += files.filter((x) => x.mimeType.startsWith('audio/')).length;
+      const fo = files.filter((x) => x.mimeType.startsWith('image/')).length, vi = files.filter((x) => x.mimeType.startsWith('video/')).length;
+      perFase[k].fotos += fo; perFase[k].videos += vi; tel.fotos += fo; tel.videos += vi;
+    }
+    films.push(tel);
   }
-  res.json({ naam: voornaam(o), partner: o.Partner || '', datum: o['Datum uitvaart'] || '', uploadlink: o.Uploadlink || uploadLink(c), perFase,
-    muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekBestanden, download: o.Download || '', prijs: DOWNLOAD_PRIJS, kijklink: kijkLink(c) });
+  const prijs = downloadPrijs(films.length);
+  res.json({ naam: voornaam(o), partner: o.Partner || '', datum: o['Datum uitvaart'] || '', uploadlink: o.Uploadlink || uploadLink(c), perFase, films,
+    muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekBestanden, download: o.Download || '', prijs, prijsTekst: euro(prijs), kijklink: kijkLink(c) });
 }
 
 // ---- 3. Afsluiten en betalen ----
@@ -174,14 +191,16 @@ async function afsluiten(res, { c, b, akkoord }) {
   if (!akkoord) return fail(res, 400, 'Vink eerst het akkoord aan');
   if (!process.env.MOLLIE_API_KEY) return fail(res, 500, 'Betalen is even niet mogelijk. Mail info@uitvaart-portret.nl');
   const terug = beheerLink(c) + '?terug=1';
+  const nFilms = (await mappen(t, c, o)).films.length;
+  const bedrag = downloadPrijs(nFilms);
   const p = await mollie('payments', { method: 'POST', body: JSON.stringify({
-    amount: { currency: 'EUR', value: DOWNLOAD_PRIJS.toFixed(2) },
-    description: `Download foto's ${voornaam(o)} [${c}]`.slice(0, 255),
+    amount: { currency: 'EUR', value: bedrag.toFixed(2) },
+    description: `Download foto's ${voornaam(o)}${nFilms > 1 ? ' (' + nFilms + ' films)' : ''} [${c}]`.slice(0, 255),
     redirectUrl: terug, webhookUrl: SITE + '/api/mollie', metadata: { code: c, soort: 'download' },
   }) });
   const wanneer = new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', dateStyle: 'long', timeStyle: 'short' });
   await logOpdracht(t, c, { Download: 'Betaling gestart ' + nu() + ' (' + p.id + ')',
-    'Akkoord voorwaarden': `ja, ${wanneer} (download verzamellink; herroepingsrecht vervalt bij levering)`, Bedrag: `€${DOWNLOAD_PRIJS}` });
+    'Akkoord voorwaarden': `ja, ${wanneer} (download verzamellink; herroepingsrecht vervalt bij levering)`, Bedrag: euro(bedrag) });
   res.json({ checkout: p._links.checkout.href });
 }
 
@@ -198,7 +217,7 @@ export async function startOmzetten(t, o, { opnieuw = false } = {}) {
       html: mailHtml(`Zet de foto's van ${c} handmatig klaar, of stel de omzetserver in.`) });
     return false;
   }
-  const m = await mappen(t, c);
+  const m = await mappen(t, c, o);
   const exp = Date.now() + 12 * 3600e3;
   const job = `${c}.${exp}.${sign('omzet:' + c + ':' + exp)}`;
   await logOpdracht(t, c, { Download: 'Omzetten ' + nuIso() });
@@ -234,7 +253,7 @@ async function omgezet(res, { job, aantal, fouten }) {
   const o = await zoek(t, c);
   if (!o) return fail(res, 404, 'Onbekend');
   if (/^Geleverd/.test(o.Download || '')) return res.json({ ok: true });
-  const m = await mappen(t, c);
+  const m = await mappen(t, c, o);
   // Map delen: 'iedereen met de link mag bekijken' (copyRequiresWriterPermission werkt niet op mappen).
   await drive(t, `files/${m.klant}/permissions`, { method: 'POST', body: JSON.stringify({ role: 'reader', type: 'anyone' }) });
   const link = 'https://drive.google.com/drive/folders/' + m.klant;
@@ -247,11 +266,11 @@ ${link}
 
 Klik rechtsboven op 'Alles downloaden'; Google maakt er een zip van.
 
-In de map 'Klaar voor diashow' staan ${n} foto’s en filmpjes in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd: eerst de portretfoto, dan de periodes van het leven, daarna de hobbyfoto’s en de foto’s waarvan de familie twijfelde. Sleep ze in één keer in uw programma, zoals PowerPoint of Photostage. De muziek staat in dezelfde map. De originelen staan per periode in de andere mappen.${mis.length ? `\n\nDeze bestanden konden we niet omzetten (de originelen staan er wel):\n${mis.join('\n')}` : ''}
+${m.films.length > 1 ? `In de map 'Klaar voor diashow' staat voor elke film een eigen map (${m.films.map(filmLabel).join(', ')}). Samen ${n} foto’s en filmpjes` : `In de map 'Klaar voor diashow' staan ${n} foto’s en filmpjes`} in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd: eerst de portretfoto, dan de periodes van het leven, daarna de hobbyfoto’s en de foto’s waarvan de familie twijfelde. Sleep ze in één keer in uw programma, zoals PowerPoint of Photostage. De muziek staat in dezelfde map${m.films.length > 1 ? ' als de foto’s van die film' : ''}. De originelen staan per periode in de andere mappen.${mis.length ? `\n\nDeze bestanden konden we niet omzetten (de originelen staan er wel):\n${mis.join('\n')}` : ''}
 
 Download alles op tijd: na 30 dagen worden de bestanden automatisch verwijderd.
 
-${partner ? 'Deze keer liever dat ik de film maak, bijvoorbeeld als het druk is of de familie iets meer wil dan een diashow? Alles staat al klaar. Antwoord op deze mail, of bel of app 06 18 42 48 58.' : `Merkt u toch dat het maken u te veel wordt, of wilt u net iets meer dan een diashow? Dan maak ik de film. De €${DOWNLOAD_PRIJS} van de download gaat eraf. Antwoord op deze mail, of bel of app 06 18 42 48 58.`}
+${partner ? 'Deze keer liever dat ik de film maak, bijvoorbeeld als het druk is of de familie iets meer wil dan een diashow? Alles staat al klaar. Antwoord op deze mail, of bel of app 06 18 42 48 58.' : `Merkt u toch dat het maken u te veel wordt, of wilt u net iets meer dan een diashow? Dan maak ik de film. Wat u voor de download betaalde (${o.Bedrag || euro(DOWNLOAD_PRIJS)}) gaat eraf. Antwoord op deze mail, of bel of app 06 18 42 48 58.`}
 
 Met vriendelijke groet,
 Daan Lubbers
@@ -312,9 +331,11 @@ async function galerij(res, { c, b, k }) {
   const t = await googleToken();
   const o = await zoek(t, c);
   if (!o) return fail(res, 404, 'Deze verzamellink bestaat niet meer');
-  const m = await mappen(t, c);
+  const m = await mappen(t, c, o);
+  const films = [];
+  for (const film of m.films) {
   const fases = [], muziek = [];
-  for (const f of m.fases) {
+  for (const f of film.fases) {
     const files = (await drive(t, 'files?pageSize=500&orderBy=name&fields=files(id,name,mimeType)&q=' + encodeURIComponent(`'${f.id}' in parents and trashed=false`))).files;
     const items = [];
     for (const x of files) {
@@ -324,7 +345,10 @@ async function galerij(res, { c, b, k }) {
     }
     fases.push({ naam: f.naam.replace(/^\d+\s*/, ''), items });
   }
-  res.json({ naam: voornaam(o), partner: o.Partner || '', fases, muziek, titels: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', gesloten: /^(Betaald|Omzetten|Geleverd)/.test(o.Download || '') });
+  films.push({ naam: filmLabel(film), fases, muziek });
+  }
+  const { fases, muziek } = films[0];
+  res.json({ naam: voornaam(o), partner: o.Partner || '', fases, muziek, films: films.length > 1 ? films : undefined, titels: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', gesloten: /^(Betaald|Omzetten|Geleverd)/.test(o.Download || '') });
 }
 
 // Eén voorbeeldplaatje (klein, via Drive-thumbnail). Alleen met een geldige handtekening per bestand.

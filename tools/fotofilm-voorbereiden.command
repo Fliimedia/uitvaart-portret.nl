@@ -5,7 +5,7 @@
 # Of: sleep de map op dit bestand in het Dock / gebruik als argument.
 
 UIT="$HOME/Movies/Fotofilms"
-VERSIE="4.2"
+VERSIE="4.3"
 APP="$HOME/Library/Application Support/Uitvaart-portret"
 BRON="https://www.uitvaart-portret.nl/tools"
 
@@ -271,7 +271,8 @@ function run(argv) {
   var groepen = [];
   ls(src).forEach(function (n) {
     var p = src + '/' + n;
-    if (isDir(p) && !/^\d+\s*Film$/i.test(n)) groepen.push({ label: n.replace(/^\d+\s*/, ''), pad: p, files: ls(p) }); // map '5 Film' (jouw eigen films) overslaan
+    // overslaan: '5 Film' (jouw eigen films), 'Film 2 – …' (extra film, krijgt een eigen PREMIERE-map) en 'Klaar voor diashow'
+    if (isDir(p) && !/^\d+\s*Film$/i.test(n) && !/^Film \d+ – /.test(n) && n !== 'Klaar voor diashow') groepen.push({ label: n.replace(/^\d+\s*/, ''), pad: p, files: ls(p) });
   });
   var los = ls(src).filter(function (n) { return !isDir(src + '/' + n); });
   if (los.length) groepen.push({ label: 'Overig', pad: src, files: los });
@@ -431,18 +432,25 @@ if [[ ! -d "$MAP" ]]; then
   echo; echo "⚠️  Dat is geen map: $MAP"; [[ -t 0 ]] && read -k1 "?Druk op een toets om te sluiten."; exit 1
 fi
 NAAM="${MAP:t}"
-DOEL="$UIT/$NAAM – PREMIERE"
-# Oude uitvoer van deze klant naar de prullenmand (wordt opnieuw gemaakt)
-for OUD in "$UIT/$NAAM – PREMIERE"*(N); do mv "$OUD" "$HOME/.Trash/${OUD:t} $(date +%H%M%S)" 2>/dev/null; done
-mkdir -p "$DOEL"
-echo; echo "Bezig met \"$NAAM\" …"
-START=$(date +%s)
-if osascript -l JavaScript "$JS" "$MAP" "$DOEL"; then
-  echo; echo "✅ Klaar in $(( $(date +%s) - START )) seconden → $DOEL"
-  open "$DOEL"
-  osascript -e "display notification \"PREMIERE-map van $NAAM staat klaar\" with title \"Fotofilm voorbereiden\"" 2>/dev/null
-else
-  echo; echo "⚠️  Er ging iets mis. Maak een screenshot van dit venster en stuur het naar Claude."
-fi
+# Oude uitvoer van deze klant naar de prullenmand (wordt opnieuw gemaakt), ook van extra films
+for OUD in "$UIT/$NAAM – PREMIERE"*(N) "$UIT/$NAAM – Film "*" – PREMIERE"*(N); do mv "$OUD" "$HOME/.Trash/${OUD:t} $(date +%H%M%S)" 2>/dev/null; done
+# Eén film per keer: de klantmap zelf (film 1) en elke submap 'Film 2 – Vrienden' enz.
+maak() {
+  local BRON="$1" DOEL="$2" LABEL="$3"
+  mkdir -p "$DOEL"
+  echo; echo "Bezig met \"$LABEL\" …"
+  START=$(date +%s)
+  if osascript -l JavaScript "$JS" "$BRON" "$DOEL"; then
+    echo; echo "✅ Klaar in $(( $(date +%s) - START )) seconden → $DOEL"
+    open "$DOEL"
+    osascript -e "display notification \"PREMIERE-map van $LABEL staat klaar\" with title \"Fotofilm voorbereiden\"" 2>/dev/null
+  else
+    echo; echo "⚠️  Er ging iets mis. Maak een screenshot van dit venster en stuur het naar Claude."
+  fi
+}
+maak "$MAP" "$UIT/$NAAM – PREMIERE" "$NAAM"
+for F in "$MAP"/Film\ <2->\ –\ *(N/); do
+  maak "$F" "$UIT/$NAAM – ${F:t} – PREMIERE" "$NAAM – ${F:t}"
+done
 rm -f "$JS"
 [[ -t 0 ]] && { echo; read -k1 "?Druk op een toets om te sluiten."; }

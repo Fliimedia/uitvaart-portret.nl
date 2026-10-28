@@ -140,60 +140,72 @@ async function pool(items, n, fn) {
 }
 
 // ---------- De opdracht ----------
+// Eén film: de vakken van die film ophalen, op volgorde zetten, omzetten en in zijn diashowmap zetten.
+async function verwerkFilm(d, tmp, film, fouten) {
+  let aantal = 0;
+  const MAP = 'application/vnd.google-apps.folder';
+  for (const f of await d.lijst(film.diashow)) if (f.mimeType !== MAP) await d.weg(f.id); // opnieuw proberen: map eerst leeg
+  // 1. Alles ophalen en dateren
+  const perFase = [];
+  const muziek = [];
+  for (let fi = 0; fi < film.fases.length; fi++) {
+    const files = (await d.lijst(film.fases[fi].id)).sort((a, b) => a.name.localeCompare(b.name, 'nl', { numeric: true }) || a.createdTime.localeCompare(b.createdTime));
+    const lijst = [];
+    for (const f of files) {
+      if (f.mimeType.startsWith('audio/') || /^MUZIEK/.test(f.name)) muziek.push(f);
+      else if (/^(image|video)\//.test(f.mimeType) || isHeic(f)) lijst.push({ f, fase: fi });
+    }
+    perFase.push(lijst);
+  }
+  const alles = perFase.flat();
+  const pre = 'f' + (film.nr || 1) + '-';
+  await pool(alles, 3, async (x, k) => {
+    x.bestand = path.join(tmp, pre + 'in' + k + path.extname(x.f.name).toLowerCase());
+    try { await d.haal(x.f.id, x.bestand); x.datum = await datum(x.f, x.bestand, x.fase); }
+    catch (e) { x.mis = true; fouten.push(x.f.name); console.error('Ophalen', x.f.name, e.message); }
+  });
+  // 2. Volgorde: portret eerst, dan per vak op datum (zonder datum: eigen plek)
+  const portret = alles.filter((x) => !x.mis && /PORTRET/.test(x.f.name));
+  const rest = perFase.map((l) => sorteer(l.filter((x) => !x.mis && !/PORTRET/.test(x.f.name))));
+  let nr = 0;
+  const plan = [...portret.map((x) => ({ x, naam: '0-000 portret' })),
+    ...rest.flatMap((l, fi) => l.map((x) => ({ x, naam: NR[fi] + '-' + String(++nr).padStart(3, '0') })))];
+  // 3. Omzetten en terugzetten (foto's 3 tegelijk, video's 1 tegelijk)
+  const doe = async ({ x, naam }) => {
+    const vid = x.f.mimeType.startsWith('video/');
+    const uit = path.join(tmp, pre + naam.replace(/\W+/g, '_') + (vid ? '.mp4' : '.jpg'));
+    try {
+      if (vid) await video(x.bestand, uit); else await foto(x.bestand, uit, isHeic(x.f));
+      await d.zet(film.diashow, naam + (vid ? '.mp4' : '.jpg'), vid ? 'video/mp4' : 'image/jpeg', uit);
+      aantal++;
+    } catch (e) { fouten.push(x.f.name); console.error('Omzetten', x.f.name, e.message); }
+    await fs.rm(uit, { force: true }); await fs.rm(x.bestand, { force: true });
+  };
+  await pool(plan.filter((p) => !p.x.f.mimeType.startsWith('video/')), 3, doe);
+  await pool(plan.filter((p) => p.x.f.mimeType.startsWith('video/')), 1, doe);
+  // 4. Muziek en MUZIEK.txt erbij (kopie in Drive, zonder downloaden)
+  for (const [k, f] of muziek.entries()) {
+    try { await d.kopieer(f.id, film.diashow, 'muziek ' + (k + 1) + ' - ' + f.name.replace(/^MUZIEK \d+ - /, '')); } catch (e) { fouten.push(f.name); }
+  }
+  for (const f of (await d.lijst(film.map)).filter((x) => x.name === 'MUZIEK.txt')) { try { await d.kopieer(f.id, film.diashow, 'MUZIEK.txt'); } catch (e) {} }
+  return aantal;
+}
+
+// Meerdere films (familie, vrienden, werk): o.films = [{ nr, naam, map, fases, diashow }]. Oude opdrachten: één film.
 export async function verwerk(o) {
   const d = drive(o);
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'omzet-'));
   const fouten = [];
   let aantal = 0;
+  const films = Array.isArray(o.films) && o.films.length ? o.films : [{ nr: 1, map: o.klant, fases: o.fases, diashow: o.diashow }];
   try {
-    for (const f of await d.lijst(o.diashow)) await d.weg(f.id); // opnieuw proberen: map eerst leeg
-    // 1. Alles ophalen en dateren
-    const perFase = [];
-    const muziek = [];
-    for (let fi = 0; fi < o.fases.length; fi++) {
-      const files = (await d.lijst(o.fases[fi].id)).sort((a, b) => a.name.localeCompare(b.name, 'nl', { numeric: true }) || a.createdTime.localeCompare(b.createdTime));
-      const lijst = [];
-      for (const f of files) {
-        if (f.mimeType.startsWith('audio/') || /^MUZIEK/.test(f.name)) muziek.push(f);
-        else if (/^(image|video)\//.test(f.mimeType) || isHeic(f)) lijst.push({ f, fase: fi });
-      }
-      perFase.push(lijst);
-    }
-    const alles = perFase.flat();
-    await pool(alles, 3, async (x, k) => {
-      x.bestand = path.join(tmp, 'in' + k + path.extname(x.f.name).toLowerCase());
-      try { await d.haal(x.f.id, x.bestand); x.datum = await datum(x.f, x.bestand, x.fase); }
-      catch (e) { x.mis = true; fouten.push(x.f.name); console.error('Ophalen', x.f.name, e.message); }
-    });
-    // 2. Volgorde: portret eerst, dan per vak op datum (zonder datum: eigen plek)
-    const portret = alles.filter((x) => !x.mis && /PORTRET/.test(x.f.name));
-    const rest = perFase.map((l) => sorteer(l.filter((x) => !x.mis && !/PORTRET/.test(x.f.name))));
-    let nr = 0;
-    const plan = [...portret.map((x) => ({ x, naam: '0-000 portret' })),
-      ...rest.flatMap((l, fi) => l.map((x) => ({ x, naam: NR[fi] + '-' + String(++nr).padStart(3, '0') })))];
-    // 3. Omzetten en terugzetten (foto's 3 tegelijk, video's 1 tegelijk)
-    const doe = async ({ x, naam }) => {
-      const vid = x.f.mimeType.startsWith('video/');
-      const uit = path.join(tmp, naam.replace(/\W+/g, '_') + (vid ? '.mp4' : '.jpg'));
-      try {
-        if (vid) await video(x.bestand, uit); else await foto(x.bestand, uit, isHeic(x.f));
-        await d.zet(o.diashow, naam + (vid ? '.mp4' : '.jpg'), vid ? 'video/mp4' : 'image/jpeg', uit);
-        aantal++;
-      } catch (e) { fouten.push(x.f.name); console.error('Omzetten', x.f.name, e.message); }
-      await fs.rm(uit, { force: true }); await fs.rm(x.bestand, { force: true });
-    };
-    await pool(plan.filter((p) => !p.x.f.mimeType.startsWith('video/')), 3, doe);
-    await pool(plan.filter((p) => p.x.f.mimeType.startsWith('video/')), 1, doe);
-    // 4. Muziek en MUZIEK.txt erbij (kopie in Drive, zonder downloaden)
-    for (const [k, f] of muziek.entries()) {
-      try { await d.kopieer(f.id, o.diashow, 'muziek ' + (k + 1) + ' - ' + f.name.replace(/^MUZIEK \d+ - /, '')); } catch (e) { fouten.push(f.name); }
-    }
-    for (const f of (await d.lijst(o.klant)).filter((x) => x.name === 'MUZIEK.txt')) { try { await d.kopieer(f.id, o.diashow, 'MUZIEK.txt'); } catch (e) {} }
+    if (films.length > 1) for (const f of await d.lijst(o.diashow)) if (f.mimeType !== 'application/vnd.google-apps.folder') await d.weg(f.id); // resten van een eerdere enkele film
+    for (const film of films) aantal += await verwerkFilm(d, tmp, film, fouten);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
   const r = await fetch(o.terug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actie: 'omgezet', job: o.job, aantal, fouten }) });
-  console.log('Klaar', o.code, aantal, 'omgezet,', fouten.length, 'fouten, terugmelding', r.status);
+  console.log('Klaar', o.code, films.length, 'film(s),', aantal, 'omgezet,', fouten.length, 'fouten, terugmelding', r.status);
 }
 
 // ---------- Webserver ----------
@@ -202,7 +214,7 @@ const BEZIG = new Map(); // code -> starttijd: dezelfde opdracht nooit twee keer
 if (!process.env.OMZET_TEST) http.createServer(async (req, res) => {
   if (req.method === 'POST' && req.url === '/omzetten') {
     let body = '';
-    for await (const stuk of req) { body += stuk; if (body.length > 1e5) break; }
+    for await (const stuk of req) { body += stuk; if (body.length > 3e5) break; }
     let o;
     try { o = JSON.parse(body); } catch (e) { res.writeHead(400).end('Ongeldig'); return; }
     if (!o.job || !TOEGESTAAN.test(o.terug || '') || !o.diashow || !Array.isArray(o.fases)) { res.writeHead(400).end('Ongeldig'); return; }

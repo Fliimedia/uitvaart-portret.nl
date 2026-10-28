@@ -1,6 +1,6 @@
 // Stuurt Daan een mail zodra een familie foto's heeft verstuurd, met een link naar de Drive-map.
 import { Resend } from 'resend';
-import { ROOT_NAME, rootMap, FASES, check, googleToken, folder, fail, nu, logVeilig, leesOpdrachten, isMail, mail as stuurMail, mailHtml } from './_lib.js';
+import { ROOT_NAME, rootMap, FASES, check, googleToken, folder, fail, nu, logVeilig, leesOpdrachten, isMail, mail as stuurMail, mailHtml, filmMappen } from './_lib.js';
 
 const FROM = 'Uitvaart portret <info@uitvaart-portret.nl>';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -38,19 +38,27 @@ export default async function handler(req, res) {
   const { c, s } = b;
   if (!check(c, s)) return fail(res, 403, 'Ongeldige link');
 
-  const perFase = Array.isArray(b.perFase) ? b.perFase.slice(0, FASES.length).map((n) => Math.max(0, parseInt(n, 10) || 0)) : FASES.map(() => 0);
+  const telFases = (v) => (Array.isArray(v) ? v.slice(0, FASES.length).map((n) => Math.max(0, parseInt(n, 10) || 0)) : FASES.map(() => 0));
+  const kort = (v, n) => String(v || '').replace(/[\u0000-\u001f]/g, ' ').replace(/\|/g, '/').trim().slice(0, n);
+  const leesMuziek = (f) => {
+    const muziek = (Array.isArray(f.muziek) ? f.muziek : []).slice(0, 5)
+      .map((m) => ({ titel: kort(m && m.titel, 200), link: kort(m && m.link, 500) }))
+      .filter((m) => m.titel || m.link);
+    const bestanden = (Array.isArray(f.muziekBestanden) ? f.muziekBestanden : []).slice(0, 5).map((n) => kort(n, 150));
+    return muziek.map((m, i) => `${i + 1}. ${m.titel || '(geen titel)'}${m.link ? ' — ' + m.link : ''}`).concat(bestanden.map((n) => 'Bestand: ' + n));
+  };
+  // Meerdere films: per film foto's per vak, naam en muziek. Oude pagina's sturen één film zonder 'films'.
+  const films = (Array.isArray(b.films) && b.films.length ? b.films : [{ nr: 1, naam: '', perFase: b.perFase, muziek: b.muziek, muziekBestanden: b.muziekBestanden }])
+    .slice(0, 6).map((f) => ({ nr: Math.min(6, Math.max(1, parseInt(f.nr, 10) || 1)), naam: kort(f.naam, 40), perFase: telFases(f.perFase), regels: leesMuziek(f) }));
+  const meer = films.some((f) => f.nr > 1) || (parseInt(b.aantalFilms, 10) || 1) > 1;
+  const perFase = FASES.map((_, k) => films.reduce((a, f) => a + f.perFase[k], 0));
   const totaal = perFase.reduce((a, n) => a + n, 0);
   const ster = Math.max(0, parseInt(b.ster, 10) || 0);
   const mislukt = Math.max(0, parseInt(b.mislukt, 10) || 0);
 
-  // Muziek: titel/artiest + optionele link, en eventuele meegestuurde bestanden.
-  const kort = (v, n) => String(v || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
-  const muziek = (Array.isArray(b.muziek) ? b.muziek : []).slice(0, 5)
-    .map((m) => ({ titel: kort(m && m.titel, 200), link: kort(m && m.link, 500) }))
-    .filter((m) => m.titel || m.link);
-  const muziekBestanden = (Array.isArray(b.muziekBestanden) ? b.muziekBestanden : []).slice(0, 5).map((n) => kort(n, 150));
-  const muziekRegels = muziek.map((m, i) => `${i + 1}. ${m.titel || '(geen titel)'}${m.link ? ' — ' + m.link : ''}`)
-    .concat(muziekBestanden.map((n) => 'Bestand: ' + n));
+  // Muziek: titel/artiest + optionele link, en eventuele meegestuurde bestanden (per film).
+  const filmLabel = (f) => f.naam || 'Film ' + f.nr;
+  const muziekRegels = films.flatMap((f) => (meer ? f.regels.map((x) => `${filmLabel(f)}: ${x}`) : f.regels));
   const muziekTekst = muziekRegels.length ? muziekRegels.join('\n') : 'NIET opgegeven';
 
   // Tijdstip van akkoord (vinkje op de uploadpagina), weergegeven in Nederlandse tijd.
@@ -66,7 +74,12 @@ export default async function handler(req, res) {
     const id = await folder(t, c, await rootMap(t));
     map = 'https://drive.google.com/drive/folders/' + id;
     if (akkoord) await bewijs(t, id, c, akkoord);
-    if (muziekRegels.length) await tekstbestand(t, id, 'MUZIEK.txt', `Klant/opdracht: ${c}\n\nMuziek:\n${muziekTekst}\n`);
+    const sub = films.some((f) => f.nr > 1) ? await filmMappen(t, id) : [];
+    for (const f of films) {
+      if (!f.regels.length) continue;
+      const doel = f.nr === 1 ? id : (sub.find((x) => x.nr === f.nr) || {}).id;
+      if (doel) await tekstbestand(t, doel, 'MUZIEK.txt', `Klant/opdracht: ${c}${meer ? '\nFilm: ' + filmLabel(f) : ''}\n\nMuziek:\n${f.regels.join('\n')}\n`);
+    }
   } catch (e) {
     console.error('Drive-map of akkoordbestand mislukt', e);
   }
@@ -97,13 +110,26 @@ uitvaart-portret.nl`;
   } catch (e) { console.error('Bevestiging familie mislukt', e); }
 
   // Optellen bij eerdere uploads; eerder doorgegeven muziek en akkoord niet overschrijven.
-  const muziekLog = [o && o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekRegels.join(' | ')].filter(Boolean).join(' | ');
-  await logVeilig(c, { 'Upload ontvangen': nu(), "Aantal foto's": nieuwTotaal, "Extra foto's (boven 60)": Math.max(0, nieuwTotaal - 60),
-    'Akkoord voorwaarden': akkoord || (o && o['Akkoord voorwaarden']) || (zelf ? 'n.v.t. (zelf maken)' : 'NIET'), 'Drive-map': map, Muziek: muziekLog || 'NIET' });
+  // In de sheet: muziek van film 2+ met 'Film n: ' ervoor (prepare.js leest dat terug per film).
+  const muziekNieuw = films.flatMap((f) => f.regels.map((x) => (f.nr > 1 ? `Film ${f.nr}: ` : '') + x));
+  const muziekLog = [o && o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekNieuw.join(' | ')].filter(Boolean).join(' | ');
+  // Films-kolom: namen op positie (film 1 | film 2 | …); bestaande namen blijven staan.
+  let filmsKolom = (o && o.Films) || '';
+  if (meer || films.some((f) => f.naam)) {
+    const namen = filmsKolom ? filmsKolom.split(' | ') : [];
+    films.forEach((f) => { namen[f.nr - 1] = (namen[f.nr - 1] && !/^Film \d+$/.test(namen[f.nr - 1]) ? namen[f.nr - 1] : '') || f.naam || 'Film ' + f.nr; });
+    for (let k = 0; k < namen.length; k++) namen[k] = namen[k] || 'Film ' + (k + 1);
+    filmsKolom = namen.join(' | ');
+  }
+  const nFilms = filmsKolom ? filmsKolom.split(' | ').length : 1; // 60 foto's per film inbegrepen
+  await logVeilig(c, { 'Upload ontvangen': nu(), "Aantal foto's": nieuwTotaal, "Extra foto's (boven 60)": Math.max(0, nieuwTotaal - 60 * nFilms),
+    'Akkoord voorwaarden': akkoord || (o && o['Akkoord voorwaarden']) || (zelf ? 'n.v.t. (zelf maken)' : 'NIET'), 'Drive-map': map, Muziek: muziekLog || 'NIET', ...(filmsKolom ? { Films: filmsKolom } : {}) });
 
   const rows = [
     ['Klant', c],
     ['Totaal', `${totaal} foto's/video's` + (totaal > 60 ? ` (${totaal - 60} boven de 60)` : '')],
+    ...(meer ? films.map((f) => [filmLabel(f), `${f.perFase.reduce((a, n) => a + n, 0)} foto's/video's`]) : []),
+    ...(filmsKolom.includes(' | ') ? [['Films in deze opdracht', filmsKolom]] : []),
     ...FASES.map((f, i) => [f.replace(/^\d /, ''), String(perFase[i] || 0)]),
     ['Met ster', String(ster)],
     ['Portretfoto', b.portret ? 'ja' : 'nee'],

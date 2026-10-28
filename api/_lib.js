@@ -73,10 +73,21 @@ function fail(res, status, message) {
 const SHEET_NAME = 'Opdrachtenoverzicht';
 const KOLOMMEN = ['Code', 'Naam', 'Contact', 'Datum uitvaart', 'Aanvraag', 'Uploadlink', 'Upload ontvangen',
   "Aantal foto's", "Extra foto's (boven 60)", 'Akkoord voorwaarden', 'Drive-map', 'Concept', 'Betaald', 'Geleverd', 'Notities',
-  'Pakket', 'Bedrag', 'Betaallink', 'Film', 'Review gevraagd', 'Muziek', 'Download', 'Partner'];
+  'Pakket', 'Bedrag', 'Betaallink', 'Film', 'Review gevraagd', 'Muziek', 'Download', 'Partner', 'Films'];
 
 // Verzamellink (zelf maken): prijs van de download en adres van de omzetserver (Google Cloud Run, geen geheim).
 const DOWNLOAD_PRIJS = 29;
+const EXTRA_FILM_VERZAMEL = 9.99; // per extra film bij de verzamellink (consument incl. btw; partner excl. btw)
+
+// Meerdere films per opdracht: film 1 = de vakmappen in de klantmap; film 2+ = submap 'Film n – naam' met dezelfde vakken.
+const FILMSUB = /^Film (\d+) – (.+)$/;
+const filmMapNaam = (nr, naam) => `Film ${nr} – ${String(naam || 'Film ' + nr).replace(/[\/\\\u0000-\u001f]/g, ' ').trim().slice(0, 40) || 'Film ' + nr}`;
+async function filmMappen(token, klant) {
+  const q = `'${klant}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const files = (await drive(token, 'files?pageSize=100&fields=files(id,name)&q=' + encodeURIComponent(q))).files;
+  return files.map((f) => { const m = FILMSUB.exec(f.name); return m && +m[1] >= 2 ? { nr: +m[1], naam: m[2], id: f.id } : null; })
+    .filter(Boolean).sort((a, b) => a.nr - b.nr);
+}
 const OMZET_URL = process.env.OMZET_URL || 'https://omzetter-783697177718.europe-west4.run.app';
 
 function nu() {
@@ -184,15 +195,17 @@ async function deel(token, fileId, download) {
 
 // ---- Prijs en Mollie ----
 const PRIJS = { Klassiek: 249, Modern: 299 };
-function berekenBedrag({ pakket, spoed = 0, extraFotos = 0, extraRondes = 0, korteVersie = false, verrekend = 0 }) {
+function berekenBedrag({ pakket, spoed = 0, extraFotos = 0, extraRondes = 0, korteVersie = false, verrekend = 0, extraFilms = 0 }) {
   const regels = [[`Fotofilm ${pakket}`, PRIJS[pakket] || 0]];
+  const ef = Math.max(0, Math.min(5, parseInt(extraFilms, 10) || 0));
+  if (ef && PRIJS[pakket]) regels.push([`${ef} extra film${ef > 1 ? 's' : ''} (60%)`, ef * Math.round(PRIJS[pakket] * 0.6)]);
   const blokken = Math.ceil(Math.max(0, extraFotos) / 5);
   if (blokken) regels.push([`${blokken * 5} extra foto's`, blokken * 10]);
   if (+spoed === 49 || +spoed === 99) regels.push(['Spoedtoeslag', +spoed]);
   if (extraRondes > 0) regels.push([`${extraRondes} extra correctieronde(s)`, 35 * extraRondes]);
   if (korteVersie) regels.push(['Korte versie om te delen', 39]);
   if (verrekend > 0) regels.push(['Verrekend: betaalde download verzamellink', -verrekend]);
-  return { regels, totaal: regels.reduce((a, [, b]) => a + b, 0) };
+  return { regels, totaal: Math.round(regels.reduce((a, [, b]) => a + b, 0) * 100) / 100 };
 }
 async function mollie(path, opts = {}) {
   const r = await fetch('https://api.mollie.com/v2/' + path, {
@@ -233,5 +246,5 @@ uitvaart-portret.nl`;
     text: `${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`, html: mailHtml(`${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`) });
 }
 
-export { ROOT_NAME, rootMap, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
+export { ROOT_NAME, rootMap, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB, filmMapNaam, filmMappen, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
   mail, mailHtml, isMail, waNummer, filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, lever };
