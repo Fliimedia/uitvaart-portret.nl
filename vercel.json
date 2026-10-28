@@ -13,6 +13,10 @@
     {
       "source": "/b/:id",
       "destination": "/verzamel.html"
+    },
+    {
+      "source": "/k/:id",
+      "destination": "/kijk.html"
     }
   ],
   "functions": {

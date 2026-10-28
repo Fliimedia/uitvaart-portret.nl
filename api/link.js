@@ -11,12 +11,14 @@ const kort = (v, n) => String(v || '').replace(/[\u0000-\u001f<>]/g, ' ').trim()
 const voornaam = (o) => String(o.Naam || '').replace(/ \(voor .*\)$/, '');
 
 export default async function handler(req, res) {
+  if (req.method === 'GET' && req.query && req.query.d) return await voorbeeld(req, res);
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
   const b = req.body || {};
   try {
     if (b.zelf || b.actie === 'zelf') return await zelfLink(req, res, b);
     if (b.actie === 'status') return await status(res, b);
     if (b.actie === 'beheerlink') return await stuurBeheerlink(res, b);
+    if (b.actie === 'galerij') return await galerij(res, b);
     if (b.actie === 'afsluiten') return await afsluiten(res, b);
     if (b.actie === 'token') return await omzetToken(res, b);
     if (b.actie === 'omgezet') return await omgezet(res, b);
@@ -36,6 +38,7 @@ const maakCode = (naam, prefix = '') => {
 const kortOf = (code) => String(code).startsWith('zelf-') ? String(code).slice(5) : '';
 export const uploadLink = (code) => kortOf(code) ? `${SITE}/z/${kortOf(code)}.${sign(code).slice(0, 12)}`
   : `${SITE}/upload.html?c=${encodeURIComponent(code)}&s=${sign(code)}`;
+export const kijkLink = (code) => `${SITE}/k/${kortOf(code)}.${sign('kijk:' + code).slice(0, 12)}`;
 export const beheerLink = (code) => `${SITE}/b/${kortOf(code)}.${sign('beheer:' + code).slice(0, 12)}`;
 const knop = (href, tekst) => `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:18px 0"><tr><td style="border-radius:26px;background:#4B5A48"><a href="${href}" style="display:inline-block;padding:14px 26px;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">${tekst}</a></td></tr></table>`;
 const html = (delen) => `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#25292A;max-width:560px">${delen.join('')}</div>`;
@@ -152,7 +155,7 @@ async function status(res, { c, b }) {
       videos: files.filter((x) => x.mimeType.startsWith('video/')).length });
   }
   res.json({ naam: voornaam(o), partner: o.Partner || '', datum: o['Datum uitvaart'] || '', uploadlink: o.Uploadlink || uploadLink(c), perFase,
-    muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekBestanden, download: o.Download || '', prijs: DOWNLOAD_PRIJS });
+    muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekBestanden, download: o.Download || '', prijs: DOWNLOAD_PRIJS, kijklink: kijkLink(c) });
 }
 
 // ---- 3. Afsluiten en betalen ----
@@ -300,4 +303,45 @@ uitvaart-portret.nl`;
   await logOpdracht(await googleToken(), code, { Naam: familie, Contact: email, 'Datum uitvaart': datum, Aanvraag: nu() + ' (partnerlink)',
     Uploadlink: link, Pakket: 'Zelf maken', Partner: partner, 'Akkoord voorwaarden': 'n.v.t. (partner)' });
   return { code, link, beheer };
+}
+
+// ---- 5. Meekijken: kleine voorbeelden per vak (voor de aanvrager én via een alleen-kijken-link) ----
+async function galerij(res, { c, b, k }) {
+  const mag = String(c).startsWith('zelf-') && (check('beheer:' + c, b) || check('kijk:' + c, k));
+  if (!mag) return fail(res, 403, 'Deze link klopt niet');
+  const t = await googleToken();
+  const o = await zoek(t, c);
+  if (!o) return fail(res, 404, 'Deze verzamellink bestaat niet meer');
+  const m = await mappen(t, c);
+  const fases = [], muziek = [];
+  for (const f of m.fases) {
+    const files = (await drive(t, 'files?pageSize=500&orderBy=name&fields=files(id,name,mimeType)&q=' + encodeURIComponent(`'${f.id}' in parents and trashed=false`))).files;
+    const items = [];
+    for (const x of files) {
+      if (x.mimeType.startsWith('audio/')) { muziek.push(x.name.replace(/^MUZIEK \d+ - /, '')); continue; }
+      if (!/^(image|video)\//.test(x.mimeType)) continue;
+      items.push({ src: `/api/link?d=${x.id}&t=${sign('voorbeeld:' + x.id).slice(0, 16)}`, video: x.mimeType.startsWith('video/'), ster: x.name.includes('★'), portret: x.name.includes('PORTRET') });
+    }
+    fases.push({ naam: f.naam.replace(/^\d+\s*/, ''), items });
+  }
+  res.json({ naam: voornaam(o), partner: o.Partner || '', fases, muziek, titels: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', gesloten: /^(Betaald|Omzetten|Geleverd)/.test(o.Download || '') });
+}
+
+// Eén voorbeeldplaatje (klein, via Drive-thumbnail). Alleen met een geldige handtekening per bestand.
+async function voorbeeld(req, res) {
+  const id = String(req.query.d || ''), sig = String(req.query.t || '');
+  if (!/^[\w-]{10,}$/.test(id) || sig.length !== 16 || !check('voorbeeld:' + id, sig)) return fail(res, 403, 'Ongeldig');
+  try {
+    const t = await googleToken();
+    const meta = await drive(t, `files/${id}?fields=thumbnailLink`);
+    if (!meta.thumbnailLink) { res.setHeader('Cache-Control', 'no-store'); return res.status(404).end(); }
+    const r = await fetch(meta.thumbnailLink.replace(/=s\d+$/, '=s400'), { headers: { Authorization: 'Bearer ' + t } });
+    if (!r.ok) return res.status(404).end();
+    res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(Buffer.from(await r.arrayBuffer()));
+  } catch (e) {
+    console.error('Voorbeeld', e);
+    res.status(404).end();
+  }
 }

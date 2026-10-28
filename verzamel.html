@@ -66,6 +66,14 @@
       <button type="button" class="knop licht" id="ververs" style="min-height:42px">Vernieuwen</button>
     </section>
 
+    <section class="box">
+      <h2>Voorbeelden</h2>
+      <p class="muted">Kleine voorbeelden van wat er binnen is, per periode. Zo ziet u of alles goed staat.</p>
+      <div id="galerij"><p class="muted">Laden…</p></div>
+      <div class="rij" style="margin-top:18px"><button type="button" class="knop licht" id="meekijk">Laat iemand meekijken</button></div>
+      <p class="muted" id="meekijk-uit" style="margin-top:10px"></p>
+    </section>
+
     <section class="box" id="afronden">
       <h2>Is iedereen klaar?</h2>
       <p>Rond het verzamelen af en download alles in één keer, voor <strong id="prijs">€29</strong>:</p>
@@ -98,6 +106,7 @@
     </section>
   </div>
 </main>
+<script src="assets/galerij.js"></script>
 <script>
 (function () {
   const q = new URLSearchParams(location.search), terug = q.get('terug');
@@ -146,7 +155,9 @@
     // Net terug van de betaling: de bevestiging van Mollie kan een paar seconden duren.
     if (terug && !klaar && !bezig && pogingen++ < 15) setTimeout(laad, 4000);
   }
+  function laadGalerij() { post({ actie: 'galerij', c, b }).then((d) => window.toonGalerij($('galerij'), d)).catch(() => { $('galerij').innerHTML = ''; }); }
   function laad() {
+    laadGalerij();
     post({ actie: 'status', c, b }).then(toon).catch((e) => {
       $('laden').classList.add('hidden'); $('ongeldig').classList.remove('hidden');
       if (e && e.error) $('ongeldig-tekst').textContent = e.error + '. Lukt het niet? Bel of app 06 18 42 48 58.';
@@ -155,6 +166,13 @@
   if (!c || !b) { $('laden').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); return; }
   $('akkoord').onchange = () => info && toon(info);
   $('ververs').onclick = laad;
+  $('meekijk').onclick = () => {
+    if (!info) return;
+    const tekst = "Kijk mee met de foto's die we verzamelen (alleen bekijken):";
+    $('meekijk-uit').innerHTML = 'Meekijklink (alleen bekijken, niets toevoegen of afronden): <a href="' + info.kijklink + '" target="_blank">' + info.kijklink.replace('https://www.', '') + '</a>';
+    if (navigator.share) navigator.share({ title: 'Meekijken', text: tekst, url: info.kijklink }).catch(() => {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(info.kijklink).then(() => { $('meekijk-uit').innerHTML += ' · gekopieerd'; }).catch(() => {});
+  };
   $('kopieer').onclick = () => navigator.clipboard && info && navigator.clipboard.writeText(info.uploadlink).then(() => { $('kopieer').textContent = 'Gekopieerd'; });
   $('delen').onclick = () => {
     if (!info) return;

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<base href="/">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Meekijken – Uitvaart portret</title>
+<link rel="icon" href="assets/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..500&amp;family=Instrument+Sans:wght@400;500;600&amp;display=swap">
+<style>
+  :root { --bg:#F3EEE6; --card:#FBF8F3; --line:#E2D9CC; --ink:#25292A; --muted:#4A4F4C; --green:#4B5A48; --warm:#EFE9DF; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:'Instrument Sans','Helvetica Neue',sans-serif; font-size:17px; line-height:1.55; }
+  main { max-width:760px; margin:0 auto; padding:32px 16px 80px; }
+  header img { height:34px; }
+  h1, h2 { font-family:'Newsreader',Georgia,serif; font-weight:400; margin:0; }
+  h1 { font-size:clamp(30px,6vw,44px); line-height:1.1; margin:28px 0 10px; }
+  h2 { font-size:26px; margin-bottom:10px; }
+  p { margin:0 0 12px; }
+  .muted { color:var(--muted); }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:24px; margin:18px 0; }
+  .warm { background:var(--warm); border-color:var(--warm); }
+  table { width:100%; border-collapse:collapse; font-size:16px; }
+  td, th { padding:9px 0; border-top:1px solid var(--line); text-align:left; }
+  th { font-weight:600; color:var(--muted); font-size:14px; border-top:0; }
+  td.n, th.n { text-align:right; width:90px; }
+  .knop { display:inline-flex; align-items:center; justify-content:center; min-height:52px; padding:0 24px; border-radius:26px; border:0; background:var(--green); color:#fff; font:inherit; font-weight:600; cursor:pointer; text-decoration:none; }
+  .knop.licht { background:transparent; color:var(--green); border:1px solid var(--green); }
+  .knop:disabled { opacity:.45; cursor:default; }
+  .rij { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  label.akkoord { display:flex; gap:12px; align-items:flex-start; margin:14px 0 18px; font-size:15px; }
+  label.akkoord input { width:22px; height:22px; margin:2px 0 0; flex-shrink:0; accent-color:var(--green); }
+  .fout { color:#8A3B2E; }
+  .hidden { display:none !important; }
+  ul { padding-left:22px; margin:6px 0 14px; color:var(--muted); }
+  a { color:var(--ink); }
+</style>
+</head>
+<body>
+<main>
+  <header><a href="/"><img src="assets/logo-horizontaal.png" alt="Uitvaart portret"></a></header>
+  <p id="laden" class="muted" style="margin-top:28px">Even laden…</p>
+  <section id="ongeldig" class="box hidden"><h2>Deze link werkt niet</h2><p id="ongeldig-tekst">Vraag de familie om een nieuwe meekijklink.</p></section>
+  <div id="pagina" class="hidden">
+    <p class="muted" id="van" style="margin:28px 0 0;font-weight:600"></p>
+    <h1 id="titel">Meekijken</h1>
+    <p class="muted">U kunt hier alleen meekijken: kleine voorbeelden van de foto's en filmpjes die de familie tot nu toe heeft klaargezet, per periode. Foto's toevoegen gaat via de uploadlink van de familie.</p>
+    <p class="muted hidden" id="dicht">Het verzamelen is afgerond.</p>
+    <section class="box"><div id="galerij"></div>
+      <div class="rij" style="margin-top:18px"><button type="button" class="knop licht" id="ververs" style="min-height:42px">Vernieuwen</button></div></section>
+  </div>
+</main>
+<script src="assets/galerij.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const m = location.pathname.match(/^\/k\/([a-z0-9-]+)\.([0-9a-f]{12,24})\/?$/);
+  if (!m) { $('laden').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); return; }
+  const c = 'zelf-' + m[1], k = m[2];
+  function laad() {
+    fetch('/api/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actie: 'galerij', c, k }) })
+      .then((r) => r.json().then((j) => { if (!r.ok) throw j; return j; }))
+      .then((d) => {
+        $('laden').classList.add('hidden'); $('pagina').classList.remove('hidden');
+        $('titel').textContent = "Meekijken" + (d.naam ? ': ' + d.naam : '');
+        $('van').textContent = d.partner ? 'Verzamellink van ' + d.partner : '';
+        $('dicht').classList.toggle('hidden', !d.gesloten);
+        window.toonGalerij($('galerij'), d);
+      })
+      .catch((e) => { $('laden').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); if (e && e.error) $('ongeldig-tekst').textContent = e.error + '.'; });
+  }
+  $('ververs').onclick = laad;
+  laad();
+})();
+</script>
+</body>
+</html>
