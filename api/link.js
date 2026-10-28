@@ -16,6 +16,7 @@ export default async function handler(req, res) {
   try {
     if (b.zelf || b.actie === 'zelf') return await zelfLink(req, res, b);
     if (b.actie === 'status') return await status(res, b);
+    if (b.actie === 'beheerlink') return await stuurBeheerlink(res, b);
     if (b.actie === 'afsluiten') return await afsluiten(res, b);
     if (b.actie === 'token') return await omzetToken(res, b);
     if (b.actie === 'omgezet') return await omgezet(res, b);
@@ -83,6 +84,27 @@ uitvaart-portret.nl`;
     await mail({ to: DAAN(), subject: `Verzamellink aangevraagd: ${naam}`, text: t, html: mailHtml(t), replyTo: email });
   } catch (e) { console.error('Melding verzamellink', e); }
   res.json({ ok: true });
+}
+
+// Beheerlink opnieuw sturen (vanaf de uploadpagina). Gaat alleen naar het e-mailadres van de aanvrager.
+async function stuurBeheerlink(res, { c, s }) {
+  if (!String(c).startsWith('zelf-') || !check(c, s)) return fail(res, 403, 'Ongeldige link');
+  const t = await googleToken();
+  const o = await zoek(t, c);
+  if (!o || !isMail(o.Contact)) return fail(res, 404, 'Geen e-mailadres bekend');
+  const tekst = `Beste ${voornaam(o)},
+
+Hier is nogmaals uw beheerpagina:
+${beheerLink(c)}
+
+Daar ziet u wat er binnen is. Is iedereen klaar met aanleveren? Klik dan op 'Iedereen is klaar' om af te ronden en alles te downloaden.
+
+Met vriendelijke groet,
+Daan Lubbers
+uitvaart-portret.nl`;
+  await mail({ to: o.Contact.trim(), subject: 'Uw beheerpagina voor de verzamellink', text: tekst, html: mailHtml(tekst), replyTo: DAAN() });
+  const [naam, domein] = o.Contact.trim().split('@');
+  res.json({ ok: true, naar: naam.slice(0, 2) + '…@' + domein });
 }
 
 // ---- 2. Beheerpagina: wat is er binnen? ----

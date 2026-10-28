@@ -112,6 +112,7 @@
     <h2>Dank u wel</h2>
     <p>Alle foto's zijn goed aangekomen. Daan gaat ermee aan de slag en neemt contact met u op zodra het concept klaar is. Heeft u ons uw e-mailadres gegeven, dan ontvangt u ook een bevestiging per mail.</p>
     <p class="delen"><button type="button" class="add licht deel-knop">Deel deze link met familie</button> <span>Hebben anderen nog foto's? Zij kunnen ze via dezelfde link toevoegen.</span></p>
+    <div class="akkoord zelf-upsell hidden" style="display:block"><strong>Heeft u deze link zelf aangevraagd?</strong><br>Rond af via uw beheerpagina; de link staat in de mail 'Uw verzamellink'. <button type="button" class="add licht" id="beheer-opnieuw" style="margin-top:10px;height:40px">Stuur mij de beheerpagina opnieuw</button> <span id="beheer-msg"></span></div>
     <div class="akkoord zelf-upsell hidden" style="display:block"><strong>Toch liever dat Daan de film maakt?</strong><br>Uw foto's staan al klaar, u hoeft niets opnieuw te doen. Een fotofilm kost €249, met filmpjes erbij €299. <a href="tel:+31618424858">Bel</a>, <a href="https://wa.me/31618424858">app</a> of <a href="mailto:info@uitvaart-portret.nl?subject=Film%20laten%20maken">mail</a> Daan.</div>
   </section>
 
@@ -151,6 +152,11 @@
   if (ZELF) {
     $('akkoord').checked = true; $('akkoord').closest('label').classList.add('hidden');
     document.querySelectorAll('.zelf-upsell').forEach(el => el.classList.remove('hidden'));
+    $('beheer-opnieuw').onclick = async () => {
+      $('beheer-opnieuw').disabled = true;
+      try { const r = await post('/api/link', { actie: 'beheerlink', c, s }); $('beheer-msg').textContent = 'Verstuurd naar ' + r.naar + '.'; }
+      catch (e) { $('beheer-msg').textContent = 'Dat lukte niet. Mail info@uitvaart-portret.nl.'; $('beheer-opnieuw').disabled = false; }
+    };
     const k = document.querySelector('#klaar p'); if (k) k.textContent = 'Uw foto\'s zijn toegevoegd. Hebben anderen nog foto\'s? Zij kunnen ze via dezelfde link toevoegen. Is iedereen klaar, dan rondt degene die de link heeft aangevraagd het af.';
     document.querySelector('#kiezen .intro').textContent = 'Zet de foto\'s per periode klaar; zo staat de volgorde al goed.';
   }
