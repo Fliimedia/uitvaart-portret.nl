@@ -85,9 +85,11 @@ export default async function handler(req, res) {
 
 Er ${totaal === 1 ? 'is 1 bestand' : 'zijn ' + totaal + ' bestanden'} toegevoegd via uw verzamellink${eerderAantal ? ' (in totaal nu ' + nieuwTotaal + ')' : ''}.
 
-Alles downloaden, genummerd en per periode op volgorde:
+Alles downloaden:
 ${download}
-Klik rechtsboven op 'Alles downloaden'; Google maakt er een zip van. Sorteer de bestanden op naam, dan staan ze in de goede volgorde.${muziekRegels.length ? '\n\nMuziek:\n' + muziekRegels.join('\n') : ''}
+Klik rechtsboven op 'Alles downloaden'; Google maakt er een zip van.
+
+In de map 'Klaar voor diashow' staan alle foto's in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd. Sleep ze in één keer in uw programma, zoals PowerPoint of Photostage. De originelen staan per periode in de andere mappen; filmpjes alleen daar.${muziekRegels.length ? '\n\nMuziek:\n' + muziekRegels.join('\n') : ''}
 
 De foto's worden 30 dagen na het uploaden automatisch verwijderd. Download ze dus op tijd.
 

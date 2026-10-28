@@ -4,6 +4,7 @@ import crypto from 'crypto';
 // De klantmap heette eerst 'Uitvaart-portret uploads'. We zoeken eerst op de nieuwe naam, dan op de oude.
 const ROOT_NAME = "1 Klanten – foto's en films";
 const ROOT_OUD = 'Uitvaart-portret uploads';
+const DIASHOW = 'Klaar voor diashow'; // alleen bij de gratis verzamellink (zelf-…)
 const FASES = ['1 Jeugd', '2 Jong volwassen', '3 Gezin en werk', '4 Later', '6 Hobby en typisch', '9 Weet ik niet']; // volgorde = vakken op upload.html
 
 function sign(value) {
@@ -226,5 +227,5 @@ uitvaart-portret.nl`;
     text: `${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`, html: mailHtml(`${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`) });
 }
 
-export { ROOT_NAME, rootMap, FASES, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
+export { ROOT_NAME, rootMap, FASES, DIASHOW, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
   mail, mailHtml, isMail, waNummer, filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, lever };

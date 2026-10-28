@@ -3,7 +3,7 @@
 // 2. Reviewverzoek 7 dagen na levering (als GOOGLE_REVIEW_URL is ingesteld en er een e-mailadres is).
 // 3. Aangeleverde foto's 30 dagen na upload, en de film 90 dagen na levering, naar de prullenbak van Drive.
 // De akkoordverklaring en het opdrachtenoverzicht blijven bewaard. Drive leegt de prullenbak zelf na 30 dagen.
-import { ROOT_NAME, rootMap, FASES, googleToken, drive, folder, fail, logVeilig, nu, nuIso, leesOpdrachten, lever, mollie, mail, mailHtml, isMail, filmMap, logOpdracht } from './_lib.js';
+import { ROOT_NAME, rootMap, FASES, DIASHOW, googleToken, drive, folder, fail, logVeilig, nu, nuIso, leesOpdrachten, lever, mollie, mail, mailHtml, isMail, filmMap, logOpdracht } from './_lib.js';
 import { leads, volgende } from './partners.js';
 
 const DAGEN = 30;
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
   const opgeruimd = [];
   for (const k of klanten) {
     const fases = await lijst(`'${k.id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
-    const oud = fases.filter((f) => FASES.includes(f.name) && f.createdTime < grens);
+    const oud = fases.filter((f) => (FASES.includes(f.name) || f.name === DIASHOW) && f.createdTime < grens);
     for (const f of oud) {
       await drive(t, `files/${f.id}`, { method: 'PATCH', body: JSON.stringify({ trashed: true }) });
     }

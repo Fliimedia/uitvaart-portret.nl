@@ -1,5 +1,5 @@
 // Maakt (of vindt) de klantmap met vier fasemappen in Drive en geeft ondertekende map-id's terug.
-import { ROOT_NAME, rootMap, FASES, sign, check, googleToken, folder, fail, leesOpdrachten } from './_lib.js';
+import { ROOT_NAME, rootMap, FASES, DIASHOW, sign, check, googleToken, folder, fail, leesOpdrachten } from './_lib.js';
 
 export default async (req, res) => {
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
@@ -10,7 +10,7 @@ export default async (req, res) => {
     const root = await rootMap(t);
     const klant = await folder(t, c, root);
     const folders = [];
-    for (const name of FASES) {
+    for (const name of String(c).startsWith('zelf-') ? [...FASES, DIASHOW] : FASES) {
       const id = await folder(t, name, klant);
       folders.push({ id, sig: sign(c + ':' + id) });
     }
