@@ -4,7 +4,7 @@ import {
   fail, googleToken, nu, logOpdracht, leesOpdrachten, mail, mailHtml, isMail, waNummer,
   filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, DOWNLOAD_PRIJS,
 } from './_lib.js';
-import { startOmzetten } from './link.js';
+import { startOmzetten, beheerLink } from './link.js';
 
 const ok = (pw) => typeof pw === 'string' && process.env.ADMIN_PASSWORD && pw.length === process.env.ADMIN_PASSWORD.length &&
   crypto.timingSafeEqual(Buffer.from(pw), Buffer.from(process.env.ADMIN_PASSWORD));
@@ -28,12 +28,18 @@ export default async function handler(req, res) {
   try {
     const t = await googleToken();
     if (b.actie === 'lijst') {
-      const lijst = (await leesOpdrachten(t)).filter((o) => o.Code).reverse();
+      const lijst = (await leesOpdrachten(t)).filter((o) => o.Code).reverse()
+        .map((o) => (o.Pakket === 'Zelf maken' ? { ...o, Beheerlink: beheerLink(o.Code) } : o));
       return res.json({ lijst });
     }
     const order = (await leesOpdrachten(t)).find((o) => o.Code === b.code);
     if (!order) return fail(res, 404, 'Opdracht niet gevonden');
     const naam = order.Naam || '';
+    // Verzamellink wordt een film: naar het tabblad Films (de €29 blijft verrekend via de kolom Download).
+    if (b.actie === 'naarFilm') {
+      await logOpdracht(t, order.Code, { Pakket: '', Notities: `${order.Notities ? order.Notities + '; ' : ''}Was verzamellink, wordt film ${nu()}` });
+      return res.json({ ok: true, melding: 'Verplaatst naar Films.' });
+    }
     // Verzamellink: omzetten starten zonder betaling (test, of als gunst/handmatige levering).
     if (b.actie === 'omzet') {
       if (!String(order.Code).startsWith('zelf-')) return fail(res, 400, 'Alleen voor verzamellinks');

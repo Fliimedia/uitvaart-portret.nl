@@ -50,8 +50,9 @@
     <div class="rij"><input id="ww" type="password" autocomplete="current-password" required style="flex:1"><button>Inloggen</button></div>
     <div class="uit fout" id="loginfout"></div>
   </form>
-  <div class="tabs" id="tabs" hidden><button type="button" class="aan" data-v="lijst">Opdrachten</button><button type="button" data-v="partners">Partners</button></div>
+  <div class="tabs" id="tabs" hidden><button type="button" class="aan" data-v="lijst">Films</button><button type="button" data-v="verzamel">Verzamellinks</button><button type="button" data-v="partners">Partners</button></div>
   <div id="lijst"></div>
+  <div id="verzamel" hidden></div>
   <div id="partners" hidden></div>
 </main>
 <script>
@@ -94,7 +95,6 @@
       <div class="rij"><span><input type="file" accept="video/*" class="film" hidden><button type="button" class="licht kies">1. Film uploaden</button></span>
         <div class="balk"><div></div></div></div>
       <div class="rij"><button type="button" class="concept">2. Concept versturen</button></div>
-      ${String(o.Code).startsWith('zelf-') ? `<div class="rij"><button type="button" class="licht omzet">Verzamellink: omzetten zonder betaling</button> <span class="code">${esc(o.Download || '')}</span></div>` : ''}
       <details><summary>3. Betaallink versturen</summary>
         <div class="rij">
           <select class="pakket"><option value="">Pakket…</option><option>Klassiek</option><option>Modern</option></select>
@@ -154,13 +154,45 @@
     return k;
   }
 
+  // ---- Verzamellinks (zelf maken) ----
+  function vKaart(o) {
+    const chip = (label, v) => `<span class="chip ${v ? 'ja' : ''}">${label}${v ? ': ' + esc(v) : ''}</span>`;
+    const d = o.Download || '';
+    const k = el(`<div class="kaart">
+      <div class="kop"><div><h2>${esc(o.Naam || o.Code)}</h2><div class="code">${esc(o.Code)} · ${esc(o.Contact || 'geen contact')}${o['Datum uitvaart'] ? ' · uitvaart ' + esc(o['Datum uitvaart']) : ''}</div></div>
+        ${o['Drive-map'] ? `<a href="${esc(o['Drive-map'])}" target="_blank">Drive-map →</a>` : ''}</div>
+      <div class="chips">${chip('Aangevraagd', (o.Aanvraag || '').replace(/ \(.*\)$/, ''))}${chip('Laatste upload', o['Upload ontvangen'])}${chip("Foto's", o["Aantal foto's"])}${chip('Download', d)}</div>
+      <div class="rij"><a href="${esc(o.Beheerlink || '#')}" target="_blank" class="licht" style="text-decoration:none;padding:10px 18px;border:1px solid #CFC4B4;border-radius:22px">Verzamelpagina van de klant →</a>
+        ${o.Uploadlink ? `<a href="${esc(o.Uploadlink)}" target="_blank" class="code">Uploadlink</a>` : ''}</div>
+      <div class="rij"><button type="button" class="licht omzet">${/^Geleverd/.test(d) ? 'Opnieuw omzetten en mailen' : 'Omzetten zonder betaling'}</button>
+        <button type="button" class="licht film">Wordt een film → naar Films</button></div>
+      <div class="uit"></div></div>`);
+    const uit = k.querySelector('.uit');
+    k.querySelector('.omzet').onclick = async (ev) => {
+      if (!confirm('Alles omzetten en de downloadlink mailen, zonder betaling?')) return;
+      ev.target.disabled = true;
+      try { toonUit(uit, await api({ actie: 'omzet', code: o.Code })); } catch (e) { toonFout(uit, e); }
+      ev.target.disabled = false;
+    };
+    k.querySelector('.film').onclick = async (ev) => {
+      if (!confirm('Laat deze familie de film door jou maken? De opdracht gaat naar het tabblad Films; een betaalde download wordt verrekend.')) return;
+      ev.target.disabled = true;
+      try { await api({ actie: 'naarFilm', code: o.Code }); laad(); } catch (e) { toonFout(uit, e); ev.target.disabled = false; }
+    };
+    return k;
+  }
+
   async function laad() {
     $('lijst').innerHTML = '<p class="code">Laden…</p>';
     try {
       const { lijst } = await api({ actie: 'lijst' });
       $('login').hidden = true; $('tabs').hidden = false;
-      $('lijst').innerHTML = lijst.length ? '' : '<p class="code">Nog geen opdrachten.</p>';
-      lijst.forEach((o) => $('lijst').appendChild(kaart(o)));
+      const zelf = lijst.filter((o) => o.Pakket === 'Zelf maken'), films = lijst.filter((o) => o.Pakket !== 'Zelf maken');
+      $('lijst').innerHTML = films.length ? '' : '<p class="code">Nog geen filmopdrachten.</p>';
+      films.forEach((o) => $('lijst').appendChild(kaart(o)));
+      $('verzamel').innerHTML = zelf.length ? `<p class="code">${zelf.length} verzamellink(s). Status per link: aangevraagd → uploads → betaald → omgezet → geleverd.</p>` : '<p class="code">Nog geen verzamellinks.</p>';
+      zelf.forEach((o) => $('verzamel').appendChild(vKaart(o)));
+      document.querySelector('#tabs [data-v="verzamel"]').textContent = 'Verzamellinks' + (zelf.length ? ` (${zelf.length})` : '');
     } catch (e) {
       $('lijst').innerHTML = ''; $('login').hidden = false; $('loginfout').textContent = e.message;
     }
@@ -233,7 +265,7 @@
   }
   document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
     document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('aan', x === b));
-    $('lijst').hidden = b.dataset.v !== 'lijst'; $('partners').hidden = b.dataset.v !== 'partners';
+    $('lijst').hidden = b.dataset.v !== 'lijst'; $('verzamel').hidden = b.dataset.v !== 'verzamel'; $('partners').hidden = b.dataset.v !== 'partners';
     if (b.dataset.v === 'partners') laadPartners();
   });
 
