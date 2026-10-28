@@ -300,8 +300,10 @@
     ({ nummers, muziekFiles, muziekAl, portretId } = films[k]);
     tekenNummers(); tekenMuziekAl(); tekenFilms(); render();
   }
+  let geladen = false; // pas na /api/prepare weten we of dit een partnerlink is
   function prijsZin() {
-    if (partner) return '';
+    // Partnerlink: de uitvaartondernemer bepaalt zelf wat de familie betaalt; de familie ziet geen prijs.
+    if (partner || (ZELF && !geladen)) return '';
     return ZELF ? ' Elke extra film kost €12,99.' : ' Een extra film kost 60% van de pakketprijs.';
   }
   function tekenFilms() {
@@ -404,7 +406,7 @@
   post('/api/prepare', { c, s }).then(r => {
     if (r && r.folders) folders = mapjes[1] = r.folders;
     const e = (r && r.eerder) || {};
-    partner = ZELF ? e.partner || '' : '';
+    partner = ZELF ? e.partner || '' : ''; geladen = true;
     // Eerder aangemaakte films (door een ander familielid) staan direct klaar als tabblad.
     (r.films || []).forEach(g => {
       if (g.nr === 1) { films[0].naam = films[0].naam || g.naam || ''; films[0].muziekAl = g.muziek || ''; films[0].vast = !!g.naam; return; }
@@ -434,7 +436,7 @@
       if (l && l.querySelector('span')) l.querySelector('span').textContent = 'Het akkoord met de voorwaarden is al gegeven door uw familielid.';
     }
     render();
-  }).catch(() => {});
+  }).catch(() => { geladen = true; tekenFilms(); });
   async function upload(jobs) {
     busy = true; render();
     $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden');
