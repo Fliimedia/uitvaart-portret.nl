@@ -4,7 +4,7 @@ import {
   fail, googleToken, nu, logOpdracht, leesOpdrachten, mail, mailHtml, isMail, waNummer,
   filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, DOWNLOAD_PRIJS,
 } from './_lib.js';
-import { startOmzetten, beheerLink, maakPartnerlink } from './link.js';
+import { startOmzetten, beheerLink, maakPartnerlink, maakConsumentlink } from './link.js';
 
 const ok = (pw) => typeof pw === 'string' && process.env.ADMIN_PASSWORD && pw.length === process.env.ADMIN_PASSWORD.length &&
   crypto.timingSafeEqual(Buffer.from(pw), Buffer.from(process.env.ADMIN_PASSWORD));
@@ -31,6 +31,10 @@ export default async function handler(req, res) {
       const lijst = (await leesOpdrachten(t)).filter((o) => o.Code).reverse()
         .map((o) => (o.Pakket === 'Zelf maken' ? { ...o, Beheerlink: beheerLink(o.Code) } : o));
       return res.json({ lijst });
+    }
+    if (b.actie === 'consumentlink') {
+      await maakConsumentlink(b, { vanuitBeheer: true });
+      return res.json({ ok: true, melding: `Verzamellink gemaild naar ${b.email}.` });
     }
     if (b.actie === 'partnerlink') {
       const r = await maakPartnerlink(b);

@@ -55,8 +55,15 @@ async function linkHandler(req, res, { wachtwoord, naam }) {
 // ---- 1. Verzamellink aanvragen ----
 async function zelfLink(req, res, b) {
   if (b.website) return res.json({ ok: true }); // honeypot: bots vullen dit veld in
+  try { await maakConsumentlink(b); return res.json({ ok: true }); }
+  catch (e) { return fail(res, e.status || 500, e.message); }
+}
+
+// Ook bruikbaar vanuit beheer (iemand appt of belt Daan): dan geen melding aan Daan zelf.
+export async function maakConsumentlink(b, { vanuitBeheer = false } = {}) {
+  const fout = (m, status) => Object.assign(new Error(m), { status });
   const naam = kort(b.naam, 80), email = kort(b.email, 120).toLowerCase(), datum = kort(b.datum, 40), voor = kort(b.voor, 80);
-  if (!naam || !isMail(email)) return fail(res, 400, 'Vul uw naam en een geldig e-mailadres in');
+  if (!naam || !isMail(email)) throw fout('Vul de naam en een geldig e-mailadres in', 400);
   const code = maakCode(voor || naam, 'zelf-');
   const link = uploadLink(code), beheer = beheerLink(code);
   const tekst = `Beste ${naam},
@@ -87,15 +94,15 @@ uitvaart-portret.nl`;
     await mail({ to: email, subject: 'Uw verzamellink', text: tekst, html: opmaak, replyTo: DAAN() });
   } catch (e) {
     console.error('Verzamellink mail', e);
-    return fail(res, 500, 'De mail kon niet verstuurd worden. Probeer het later opnieuw of mail info@uitvaart-portret.nl');
+    throw fout('De mail kon niet verstuurd worden. Probeer het later opnieuw of mail info@uitvaart-portret.nl', 500);
   }
   await logVeilig(code, { Naam: naam + (voor ? ' (voor ' + voor + ')' : ''), Contact: email, 'Datum uitvaart': datum,
-    Aanvraag: nu() + ' (verzamellink)', Uploadlink: link, Pakket: 'Zelf maken' });
-  try {
+    Aanvraag: nu() + (vanuitBeheer ? ' (verzamellink, door Daan)' : ' (verzamellink)'), Uploadlink: link, Pakket: 'Zelf maken' });
+  if (!vanuitBeheer) try {
     const t = `Nieuwe verzamellink\n\nNaam: ${naam}\nVoor: ${voor || '-'}\nE-mail: ${email}\nDatum uitvaart: ${datum || '-'}\nCode: ${code}`;
     await mail({ to: DAAN(), subject: `Verzamellink aangevraagd: ${naam}`, text: t, html: mailHtml(t), replyTo: email });
   } catch (e) { console.error('Melding verzamellink', e); }
-  res.json({ ok: true });
+  return { code, link, beheer };
 }
 
 // Beheerlink opnieuw sturen (vanaf de uploadpagina). Gaat alleen naar het e-mailadres van de aanvrager.
