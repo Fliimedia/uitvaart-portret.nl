@@ -61,6 +61,7 @@
 
     <section class="box">
       <h2>Wat is er binnen</h2>
+      <p id="films-uitleg" class="hidden" style="margin:6px 0 4px;padding:14px 16px;border-radius:12px;background:#EEF1EC"></p>
       <table><thead><tr><th>Periode</th><th class="n">Foto’s</th><th class="n">Filmpjes</th></tr></thead><tbody id="tabel"></tbody></table>
       <p class="muted" id="muziek" style="margin-top:14px"></p>
       <button type="button" class="knop licht" id="ververs" style="min-height:42px">Vernieuwen</button>
@@ -128,10 +129,23 @@
     $('prijs').textContent = prijs + (meer && !j.partner ? ` (${j.films.length} films: €39 + €12,99 per extra film)` : '');
     $('zelf-upload').href = j.uploadlink;
     let f = 0, v = 0;
-    // Meerdere films (bijv. familie, vrienden, werk): per film een regel; anders per periode.
-    $('tabel').innerHTML = (meer ? j.films : j.perFase).map((p) => { f += p.fotos; v += p.videos;
-      return `<tr><td>${meer ? '<strong>' + esc(p.naam) + '</strong>' : esc(p.naam)}</td><td class="n">${p.fotos}</td><td class="n">${p.videos}</td></tr>`; }).join('') +
+    // Meerdere films (bijv. familie, vrienden, werk): per film een kop met totaal, de periodes en de muziek.
+    const uitleg = $('films-uitleg');
+    uitleg.classList.toggle('hidden', !meer);
+    if (meer) {
+      const namen = j.films.map((x) => esc(x.naam));
+      uitleg.innerHTML = `<strong>De familie maakt ${j.films.length} films:</strong> ${namen.slice(0, -1).join(', ')} en ${namen.slice(-1)}. Elke film heeft eigen foto’s en eigen muziek, en krijgt bij het downloaden een eigen map.` +
+        (j.partner ? ` Elke extra film komt voor €9,99 excl. btw op de maandfactuur.` : ` Elke extra film kost €12,99; samen ${esc(prijs)}.`);
+    }
+    const rij = (p, sub) => `<tr><td${sub ? ' style="padding-left:18px"' : ''}>${esc(p.naam)}</td><td class="n">${p.fotos}</td><td class="n">${p.videos}</td></tr>`;
+    $('tabel').innerHTML = (meer
+      ? j.films.map((x) => { f += x.fotos; v += x.videos;
+          return `<tr><td><strong>${esc(x.naam)}</strong></td><td class="n"><strong>${x.fotos}</strong></td><td class="n"><strong>${x.videos}</strong></td></tr>` +
+            x.perFase.filter((p) => p.fotos + p.videos).map((p) => rij(p, true)).join('') +
+            `<tr><td colspan="3" style="padding-left:18px;color:${x.muziek || x.muziekBestanden ? '#4A4F4C' : '#8A3B2E'}">Muziek: ${x.muziek ? esc(x.muziek) : x.muziekBestanden ? x.muziekBestanden + ' bestand' + (x.muziekBestanden === 1 ? '' : 'en') : 'nog niet doorgegeven'}</td></tr>`; }).join('')
+      : j.perFase.map((p) => { f += p.fotos; v += p.videos; return rij(p); }).join('')) +
       `<tr><td><strong>Totaal</strong></td><td class="n"><strong>${f}</strong></td><td class="n"><strong>${v}</strong></td></tr>`;
+    $('muziek').classList.toggle('hidden', meer);
     $('muziek').textContent = j.muziek ? 'Muziek: ' + j.muziek + (j.muziekBestanden ? ` (${j.muziekBestanden} bestand${j.muziekBestanden === 1 ? '' : 'en'})` : '')
       : j.muziekBestanden ? `Muziek: ${j.muziekBestanden} bestand${j.muziekBestanden === 1 ? '' : 'en'}` : 'Er is nog geen muziek doorgegeven.';
     const d = j.download || '';

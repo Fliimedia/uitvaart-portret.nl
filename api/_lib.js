@@ -47,7 +47,8 @@ async function folder(token, name, parent) {
   const esc = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   let q = `name='${esc}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   if (parent) q += ` and '${parent}' in parents`;
-  const list = await drive(token, 'files?fields=files(id)&q=' + encodeURIComponent(q));
+  // Oudste eerst: ontstaat er ooit een dubbele map (twee verzoeken tegelijk), dan kiest iedereen dezelfde.
+  const list = await drive(token, 'files?orderBy=createdTime&fields=files(id)&q=' + encodeURIComponent(q));
   if (list.files.length) return list.files[0].id;
   const body = { name, mimeType: 'application/vnd.google-apps.folder' };
   if (parent) body.parents = [parent];

@@ -3,7 +3,7 @@
 // - Verzamellink (zelf maken): aanvragen, status bekijken, afsluiten en betalen (€39), en de terugkoppeling van de omzetserver.
 import crypto from 'crypto';
 import { sign, check, fail, nu, nuIso, logVeilig, logOpdracht, isMail, mail, mailHtml, googleToken, drive, folder, rootMap,
-  leesOpdrachten, deel, mollie, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, filmMappen } from './_lib.js';
+  leesOpdrachten, deel, mollie, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB } from './_lib.js';
 
 const DAAN = () => process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl';
 const SITE = 'https://www.uitvaart-portret.nl';
@@ -134,17 +134,53 @@ async function zoek(t, c) { return (await leesOpdrachten(t)).find((o) => o.Code 
 
 // Film 1 = de vakken in de klantmap; film 2+ = submappen 'Film n – naam'. Bij meer films krijgt elke film
 // in 'Klaar voor diashow' een eigen map. fases/diashow blijven die van film 1 (voor oude aanroepen).
-async function mappen(t, c, o) {
+// maak = false (status, voorbeelden): alleen kijken, niets aanmaken; de pagina vraagt status en voorbeelden tegelijk op,
+// en aanmaken in twee verzoeken tegelijk gaf dubbele mappen. maak = true (omzetten): ontbrekende mappen aanmaken en
+// eventuele dubbele vakmappen samenvoegen in de oudste. Elk vak: { naam, id (oudste), ids (alle) }.
+const MAP = 'application/vnd.google-apps.folder';
+async function submappen(t, ouder) {
+  const q = `'${ouder}' in parents and mimeType='${MAP}' and trashed=false`;
+  const lijst = (await drive(t, 'files?pageSize=200&orderBy=createdTime&fields=files(id,name)&q=' + encodeURIComponent(q))).files;
+  const per = {};
+  for (const f of lijst) (per[f.name] = per[f.name] || []).push(f.id);
+  return per;
+}
+async function voegSamen(t, ids) {
+  for (const dub of ids.slice(1)) {
+    const q = `'${dub}' in parents and trashed=false`;
+    for (const f of (await drive(t, 'files?pageSize=1000&fields=files(id)&q=' + encodeURIComponent(q))).files) {
+      await drive(t, `files/${f.id}?addParents=${ids[0]}&removeParents=${dub}&fields=id`, { method: 'PATCH', body: '{}' });
+    }
+    await drive(t, `files/${dub}`, { method: 'PATCH', body: JSON.stringify({ trashed: true }) });
+  }
+  return ids.slice(0, 1);
+}
+async function mappen(t, c, o, { maak = false } = {}) {
   const klant = await folder(t, c, await rootMap(t));
-  const vakken = async (ouder) => { const r = []; for (const naam of FASES) r.push({ naam, id: await folder(t, naam, ouder) }); return r; };
-  const fases = await vakken(klant);
-  const diashow = await folder(t, DIASHOW, klant);
+  const binnen = await submappen(t, klant);
+  const pak = async (per, naam, ouder) => {
+    let ids = per[naam] || [];
+    if (!ids.length && maak) ids = [await folder(t, naam, ouder)];
+    if (ids.length > 1 && maak) ids = await voegSamen(t, ids);
+    return ids;
+  };
+  const vakken = async (ouder, per) => { const r = []; for (const naam of FASES) { const ids = await pak(per, naam, ouder); r.push({ naam, id: ids[0] || null, ids }); } return r; };
+  const fases = await vakken(klant, binnen);
+  const diashow = (await pak(binnen, DIASHOW, klant))[0] || null;
   const n1 = String((o && o.Films) || '').split(' | ')[0].trim();
   const films = [{ nr: 1, naam: /^Film \d+$/.test(n1) ? '' : n1, map: klant, fases }];
-  for (const f of await filmMappen(t, klant)) films.push({ nr: f.nr, naam: f.naam, map: f.id, fases: await vakken(f.id) });
-  if (films.length > 1) for (const f of films) f.diashow = await folder(t, `Film ${f.nr}` + (f.naam ? ' – ' + f.naam : ''), diashow);
+  const extra = Object.entries(binnen).map(([naam, ids]) => { const m = FILMSUB.exec(naam); return m && +m[1] >= 2 ? { nr: +m[1], naam: m[2], id: ids[0] } : null; })
+    .filter(Boolean).sort((a, b) => a.nr - b.nr);
+  for (const f of extra) films.push({ nr: f.nr, naam: f.naam, map: f.id, fases: await vakken(f.id, await submappen(t, f.id)) });
+  if (maak && films.length > 1) for (const f of films) f.diashow = await folder(t, `Film ${f.nr}` + (f.naam ? ' – ' + f.naam : ''), diashow);
   else films[0].diashow = diashow;
   return { klant, fases, diashow, films };
+}
+// Bestanden in een vak (alle dubbele mappen samen).
+async function inVak(t, vak, velden) {
+  const uit = [];
+  for (const id of vak.ids) uit.push(...(await drive(t, `files?pageSize=1000&orderBy=name&fields=files(${velden})&q=` + encodeURIComponent(`'${id}' in parents and trashed=false`))).files);
+  return uit.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'nl', { numeric: true }));
 }
 const filmLabel = (f) => f.naam || 'Film ' + f.nr;
 // Download bij de verzamellink: €39, plus €12,99 per extra film.
@@ -160,14 +196,20 @@ async function status(res, { c, b }) {
   const perFase = FASES.map((naam) => ({ naam: naam.replace(/^\d+\s*/, ''), fotos: 0, videos: 0 }));
   const films = [];
   let muziekBestanden = 0;
+  // Muziek per film uit de sheet: regels van film 2+ beginnen met 'Film n: '.
+  const regels = String(o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '').split(' | ').filter(Boolean);
+  const muziekVan = (nr) => regels.filter((x) => (nr === 1 ? !/^Film \d+: /.test(x) : x.startsWith(`Film ${nr}: `))).map((x) => x.replace(/^Film \d+: /, ''));
   for (const film of m.films) {
-    const tel = { naam: filmLabel(film), fotos: 0, videos: 0 };
+    const tel = { naam: filmLabel(film), fotos: 0, videos: 0, muziekBestanden: 0, perFase: [] };
     for (const [k, f] of film.fases.entries()) {
-      const files = (await drive(t, 'files?pageSize=1000&fields=files(mimeType)&q=' + encodeURIComponent(`'${f.id}' in parents and trashed=false`))).files;
-      muziekBestanden += files.filter((x) => x.mimeType.startsWith('audio/')).length;
+      const files = await inVak(t, f, 'name,mimeType');
+      const au = files.filter((x) => x.mimeType.startsWith('audio/')).length;
       const fo = files.filter((x) => x.mimeType.startsWith('image/')).length, vi = files.filter((x) => x.mimeType.startsWith('video/')).length;
+      muziekBestanden += au; tel.muziekBestanden += au;
       perFase[k].fotos += fo; perFase[k].videos += vi; tel.fotos += fo; tel.videos += vi;
+      tel.perFase.push({ naam: perFase[k].naam, fotos: fo, videos: vi });
     }
+    tel.muziek = muziekVan(film.nr).join(' · ');
     films.push(tel);
   }
   const prijs = downloadPrijs(films.length);
@@ -217,7 +259,7 @@ export async function startOmzetten(t, o, { opnieuw = false } = {}) {
       html: mailHtml(`Zet de foto's van ${c} handmatig klaar, of stel de omzetserver in.`) });
     return false;
   }
-  const m = await mappen(t, c, o);
+  const m = await mappen(t, c, o, { maak: true });
   const exp = Date.now() + 12 * 3600e3;
   const job = `${c}.${exp}.${sign('omzet:' + c + ':' + exp)}`;
   await logOpdracht(t, c, { Download: 'Omzetten ' + nuIso() });
@@ -336,7 +378,7 @@ async function galerij(res, { c, b, k }) {
   for (const film of m.films) {
   const fases = [], muziek = [];
   for (const f of film.fases) {
-    const files = (await drive(t, 'files?pageSize=500&orderBy=name&fields=files(id,name,mimeType)&q=' + encodeURIComponent(`'${f.id}' in parents and trashed=false`))).files;
+    const files = await inVak(t, f, 'id,name,mimeType');
     const items = [];
     for (const x of files) {
       if (x.mimeType.startsWith('audio/')) { muziek.push(x.name.replace(/^MUZIEK \d+ - /, '')); continue; }
