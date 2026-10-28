@@ -4,7 +4,7 @@ import crypto from 'crypto';
 // De klantmap heette eerst 'Uitvaart-portret uploads'. We zoeken eerst op de nieuwe naam, dan op de oude.
 const ROOT_NAME = "1 Klanten – foto's en films";
 const ROOT_OUD = 'Uitvaart-portret uploads';
-const FASES = ['1 Jeugd', '2 Jong volwassen', '3 Gezin en werk', '4 Later', '9 Weet ik niet'];
+const FASES = ['1 Jeugd', '2 Jong volwassen', '3 Gezin en werk', '4 Later', '6 Hobby en typisch', '9 Weet ik niet']; // volgorde = vakken op upload.html
 
 function sign(value) {
   return crypto.createHmac('sha256', process.env.UPLOAD_SECRET).update(value).digest('hex').slice(0, 24);

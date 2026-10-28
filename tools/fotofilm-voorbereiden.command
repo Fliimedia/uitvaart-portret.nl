@@ -5,7 +5,7 @@
 # Of: sleep de map op dit bestand in het Dock / gebruik als argument.
 
 UIT="$HOME/Movies/Fotofilms"
-VERSIE="4.1"
+VERSIE="4.2"
 APP="$HOME/Library/Application Support/Uitvaart-portret"
 BRON="https://www.uitvaart-portret.nl/tools"
 
@@ -303,6 +303,8 @@ function run(argv) {
       var img = load(p);
       if (!img) { fout.push(n + ' (kan niet openen)'); return; }
       var datum = LAATSTE_DATUM;
+      // Gefotografeerde papieren foto: datum van vandaag. Recente datums tellen alleen mee in 'Later'.
+      if (datum > Date.now() - 60 * 864e5 && !/^Later/i.test(g.label)) datum = 0;
       var d = size(img), m = Math.max(d.w, d.h);
       if (m > MAX) img = scale(img, MAX / m);
       var an = analyse(img);

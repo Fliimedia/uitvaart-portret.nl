@@ -38,6 +38,8 @@
   .weg { top:6px; right:6px; width:30px; height:30px; border-radius:15px; background:rgba(37,41,42,.65); color:#fff; font-size:18px; line-height:30px; }
   .port { left:6px; right:6px; bottom:6px; height:28px; border-radius:14px; background:rgba(255,255,255,.88); font-size:13px; font-weight:600; color:var(--muted); }
   .thumb.portret .port { background:var(--green); color:#fff; }
+  .thumb.dubbel { border-color:#C9822B; }
+  .thumb .dub { position:absolute; left:6px; right:42px; top:46px; padding:3px 6px; border-radius:8px; background:#C9822B; color:#fff; font-size:11px; font-weight:600; text-align:center; pointer-events:none; }
   .nummer { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
   .nummer input { height:48px; box-sizing:border-box; padding:0 14px; border:1px solid var(--line); border-radius:12px; font:inherit; font-size:16px; background:#fff; color:var(--ink); min-width:0; }
   .muziek-acties { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
@@ -79,6 +81,7 @@
     <p class="delen"><button type="button" class="add licht deel-knop">Deel deze link met familie</button> <span>Iedereen kan via dezelfde link foto's toevoegen.</span></p>
     <ol class="steps">
       <li>Zet de foto's in de periode waar ze bij horen. Twijfelt u? Zet ze bij <strong>Weet ik niet zeker</strong>.</li>
+      <li>Foto's van hobby's, reizen of wat typisch voor hem of haar was? Zet ze bij <strong>Hobby, reizen, typisch</strong>.</li>
       <li>Tik op de <strong>☆</strong> bij foto's die er zeker in moeten.</li>
       <li>Kies één <strong>portretfoto</strong> voor het begin of einde van de film.</li>
       <li>Vul onderaan de <strong>muziek</strong> in.</li>
@@ -126,6 +129,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/lite.umd.js" defer></script>
 <script>
 (() => {
   const FASES = [
@@ -133,6 +137,7 @@
     ['Jong volwassen', 'Studie, eerste baan, verliefd'],
     ['Gezin en werk', 'Trouwen, kinderen, werk, vakanties'],
     ['Later', 'De latere jaren, kleinkinderen, recente foto\'s'],
+    ['Hobby, reizen, typisch hij of zij', 'Wat hij of zij graag deed: hobby\'s, sport, reizen, huisdieren, vaste plekken. Uit welke periode maakt niet uit.'],
     ['Weet ik niet zeker', 'Twijfelt u waar een foto hoort? Zet hem hier, dan zoeken wij het uit.'],
   ];
   const params = new URLSearchParams(location.search);
@@ -152,27 +157,88 @@
 
   const extMime = n => /\.(heic|heif)$/i.test(n) ? 'image/heic' : /\.(jpe?g)$/i.test(n) ? 'image/jpeg' : /\.mov$/i.test(n) ? 'video/quicktime' : '';
 
+  const MOBIEL = matchMedia('(pointer: coarse)').matches;
   // Vakken opbouwen
   FASES.forEach(([titel, hint], f) => {
     const sec = document.createElement('section');
     sec.className = 'fase';
     sec.innerHTML = `<div class="fase-head"><div><h2>${titel}</h2><p>${hint}</p></div>
-      <label class="add">+ Foto's toevoegen<input type="file" multiple accept="image/*,video/*"></label></div>
+      <span style="display:flex;flex-wrap:wrap;gap:8px"><label class="add">+ Foto's toevoegen<input type="file" multiple accept="image/*,video/*"></label>${MOBIEL ? '<label class="add licht">Papieren foto fotograferen<input type="file" accept="image/*" capture="environment" data-afdruk="1"></label>' : ''}</span></div>
       <div class="grid" id="grid${f}"></div>`;
-    sec.querySelector('input').addEventListener('change', e => { add(e.target.files, f); e.target.value = ''; });
+    sec.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => { add(e.target.files, f, !!inp.dataset.afdruk); e.target.value = ''; }));
     sec.addEventListener('dragover', e => { e.preventDefault(); sec.classList.add('drag'); });
     sec.addEventListener('dragleave', () => sec.classList.remove('drag'));
     sec.addEventListener('drop', e => { e.preventDefault(); sec.classList.remove('drag'); add(e.dataTransfer.files, f); });
     $('fases').appendChild(sec);
   });
 
-  function add(files, fase) {
+  function add(files, fase, afdruk) {
     for (const file of files) {
       const mime = file.type || extMime(file.name);
       if (!/^(image|video)\//.test(mime)) continue;
-      items.push({ id: nextId++, file, mime, fase, star: false, url: URL.createObjectURL(file) });
+      // Precies hetzelfde bestand nog een keer (zelfde naam en grootte): niet dubbel toevoegen.
+      if (items.some(x => x.file.name === file.name && x.file.size === file.size)) continue;
+      const i = { id: nextId++, file, mime, fase, star: false, afdruk: !!afdruk, url: URL.createObjectURL(file) };
+      items.push(i);
+      if (mime.startsWith('image/')) vingerafdruk(i);
     }
     render();
+  }
+
+  // --- Bijna dezelfde foto's herkennen (alles gebeurt op dit apparaat; er gaat niets naar buiten) ---
+  // dHash: foto verkleinen tot 9x8 grijswaarden en per rij vergelijken of de pixel lichter is dan de buurman.
+  function vingerafdruk(i) {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const cv = document.createElement('canvas'); cv.width = 9; cv.height = 8;
+        const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(img, 0, 0, 9, 8);
+        const p = cx.getImageData(0, 0, 9, 8).data, bits = [];
+        for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+          const a = (y * 9 + x) * 4, b = a + 4;
+          bits.push(p[a] + p[a + 1] + p[a + 2] > p[b] + p[b + 1] + p[b + 2] ? 1 : 0);
+        }
+        i.hash = bits; markeerDubbel();
+      } catch (e) {}
+    };
+    img.src = i.url;
+  }
+  let dubbelTimer = null;
+  function markeerDubbel() {
+    clearTimeout(dubbelTimer);
+    dubbelTimer = setTimeout(() => {
+      const h = items.filter(x => x.hash);
+      h.forEach(x => x.dubbel = false);
+      for (let a = 0; a < h.length; a++) for (let b = a + 1; b < h.length; b++) {
+        let d = 0; for (let k = 0; k < 64 && d <= 6; k++) d += h[a].hash[k] !== h[b].hash[k];
+        if (d <= 6) { h[a].dubbel = h[b].dubbel = true; }
+      }
+      render();
+    }, 300);
+  }
+
+  // --- Opnamedatum (alleen van echte digitale foto's) ---
+  // Een gefotografeerde papieren foto heeft de datum van vandaag. Daarom: foto's via 'Papieren foto fotograferen'
+  // en datums van de laatste 60 dagen (behalve in 'Later') tellen niet mee. Foto's zonder datum houden hun plek.
+  async function opnamedatum(i) {
+    if (i.afdruk || !i.mime.startsWith('image/') || !window.exifr) return 0;
+    try {
+      const e = await exifr.parse(i.file);
+      const d = e && (e.DateTimeOriginal || e.CreateDate);
+      const t = d instanceof Date ? d.getTime() : 0;
+      if (!t || t < Date.UTC(1900, 0, 1)) return 0;
+      if (i.fase !== 3 && t > Date.now() - 60 * 864e5) return 0;
+      return t;
+    } catch (e) { return 0; }
+  }
+  async function sorteerOpDatum(lijst) {
+    const ds = await Promise.all(lijst.map(opnamedatum));
+    const plekken = [], gedateerd = [];
+    lijst.forEach((x, k) => { if (ds[k]) { plekken.push(k); gedateerd.push([ds[k], x]); } });
+    gedateerd.sort((a, b) => a[0] - b[0]);
+    const uit = lijst.slice();
+    plekken.forEach((k, n) => { uit[k] = gedateerd[n][1]; });
+    return uit;
   }
 
   // --- Muziek ---
@@ -204,11 +270,12 @@
       grid.innerHTML = '';
       items.filter(i => i.fase === f).forEach(i => {
         const d = document.createElement('div');
-        d.className = 'thumb' + (i.id === portretId ? ' portret' : '');
+        d.className = 'thumb' + (i.id === portretId ? ' portret' : '') + (i.dubbel ? ' dubbel' : '');
         const media = i.mime.startsWith('image/')
           ? `<img src="${i.url}" alt="" loading="lazy">`
           : `<span class="naam">🎬</span>`;
         d.innerHTML = media +
+          (i.dubbel ? '<span class="dub">Lijkt dubbel</span>' : '') +
           `<button class="ster" aria-pressed="${i.star}" aria-label="Moet erin">${i.star ? '★' : '☆'}</button>
            <button class="weg" aria-label="Verwijderen">×</button>
            <button class="port">${i.id === portretId ? 'Portret ✓' : 'Portret'}</button>`;
@@ -331,14 +398,16 @@
     $('mislukt').classList.remove('hidden');
   }
 
-  $('verstuur').onclick = () => {
+  $('verstuur').onclick = async () => {
     if (!ZELF && !portretId && !confirm('U heeft nog geen portretfoto gekozen. Toch versturen?')) return;
     const jobs = [];
+    $('verstuur').disabled = true;
+    const NR = [1, 2, 3, 4, 6, 9];
     for (let f = 0; f < FASES.length; f++) {
-      items.filter(i => i.fase === f).forEach((i, n) => {
+      (await sorteerOpDatum(items.filter(i => i.fase === f))).forEach((i, n) => {
         const tags = (i.star ? ' ★' : '') + (i.id === portretId ? ' PORTRET' : '');
         const nr = String(n + 1).padStart(ZELF ? 3 : 2, '0');
-        jobs.push({ file: i.file, mime: i.mime, fase: f, name: (ZELF ? (f === 4 ? 9 : f + 1) + '-' + nr : nr) + tags + ' - ' + i.file.name });
+        jobs.push({ file: i.file, mime: i.mime, fase: f, name: (ZELF ? NR[f] + '-' + nr : nr) + tags + ' - ' + i.file.name });
       });
     }
     muziekFiles.forEach((file, k) => jobs.push({ file, mime: file.type || 'audio/mpeg', fase: 0, audio: true, name: 'MUZIEK ' + (k + 1) + ' - ' + file.name }));
