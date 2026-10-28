@@ -93,7 +93,7 @@
 
     <section class="box warm">
       <h2>Toch liever dat Daan de film maakt?</h2>
-      <p>Wordt het u te veel, of wilt u net iets meer dan een diashow? Dan maak ik de film. Uw foto’s staan al klaar, en een betaalde download van €29 wordt verrekend. Een fotofilm kost €249, met filmpjes erbij €299.</p>
+      <p id="upsell-tekst">Wordt het u te veel, of wilt u net iets meer dan een diashow? Dan maak ik de film. Uw foto’s staan al klaar, en een betaalde download van €29 wordt verrekend. Een fotofilm kost €249, met filmpjes erbij €299.</p>
       <div class="rij"><a class="knop" id="wa" href="https://wa.me/31618424858">App Daan</a> <a class="knop licht" href="tel:+31618424858">Bel 06 18 42 48 58</a> <a class="knop licht" id="ml" href="mailto:info@uitvaart-portret.nl">Mail</a></div>
     </section>
   </div>
@@ -129,8 +129,18 @@
     $('delen-box').classList.toggle('hidden', klaar || bezig);
     $('bezig').classList.toggle('hidden', !bezig);
     $('geleverd').classList.toggle('hidden', !klaar);
-    $('betaal').disabled = !$('akkoord').checked || f + v === 0;
-    $('betaal').textContent = f + v === 0 ? 'Nog niets binnen' : `Iedereen is klaar: afronden en betalen (€${j.prijs})`;
+    if (j.partner) {
+      // Partner: geen betaling en geen voorwaarden-vinkje; Daan factureert per maand.
+      $('akkoord').closest('label').classList.add('hidden');
+      $('afronden').querySelector('p').textContent = 'Rond het verzamelen af en ontvang alles in één keer:';
+      $('sub').textContent = 'Verzamellink van ' + j.partner + (j.datum ? ' · uitvaart ' + j.datum : '') + '. Deze pagina is alleen voor u.';
+      $('upsell-tekst').textContent = 'Druk, of wil de familie net iets meer dan een diashow? Dan maak ik de film, tegen het partnertarief. Alles staat al klaar.';
+      $('betaal').disabled = f + v === 0;
+      $('betaal').textContent = f + v === 0 ? 'Nog niets binnen' : 'Iedereen is klaar: afronden';
+    } else {
+      $('betaal').disabled = !$('akkoord').checked || f + v === 0;
+      $('betaal').textContent = f + v === 0 ? 'Nog niets binnen' : `Iedereen is klaar: afronden en betalen (€${j.prijs})`;
+    }
     const t = encodeURIComponent('Hallo Daan, wil jij de film maken? Mijn verzamellink: ' + c);
     $('wa').href = 'https://wa.me/31618424858?text=' + t; $('ml').href = 'mailto:info@uitvaart-portret.nl?subject=Film%20laten%20maken&body=' + t;
     // Net terug van de betaling: de bevestiging van Mollie kan een paar seconden duren.

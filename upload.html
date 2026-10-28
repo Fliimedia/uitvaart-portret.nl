@@ -343,10 +343,18 @@
       p.textContent = 'De muziek is al doorgegeven: ' + e.muziek + '. U hoeft hier niets in te vullen, maar mag wel iets toevoegen.';
       $('nummers').before(p);
     }
+    if (ZELF && e.partner) {
+      // Partnerlink: de uitvaartbegeleider is het aanspreekpunt; geen aanbod van Daan aan de familie.
+      document.querySelectorAll('.zelf-upsell').forEach(el => el.classList.add('hidden'));
+      const h = document.querySelector('#kiezen h1'); if (h) h.textContent = "Foto's verzamelen";
+      const v = document.createElement('p'); v.className = 'intro'; v.style.fontWeight = '600';
+      v.textContent = 'Verzamellink van ' + e.partner; if (h) h.before(v);
+      const k = document.querySelector('#klaar p'); if (k) k.textContent = "Uw foto's zijn toegevoegd. Hebben anderen nog foto's? Zij kunnen ze via dezelfde link toevoegen. " + e.partner + ' rondt het af zodra iedereen klaar is.';
+    }
     if (ZELF && e.gesloten) {
       $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden');
       const o = $('ongeldig'); o.querySelector('h2').textContent = 'Het verzamelen is afgesloten';
-      o.querySelector('p').textContent = 'Degene die deze link heeft aangevraagd heeft het verzamelen afgerond. Heeft u nog foto\'s? Stuur ze dan rechtstreeks naar hem of haar.';
+      o.querySelector('p').textContent = (e.partner ? e.partner + ' heeft' : 'Degene die deze link heeft aangevraagd heeft') + ' het verzamelen afgerond. Heeft u nog foto\'s? Stuur ze dan rechtstreeks naar ' + (e.partner || 'hem of haar') + '.';
       o.classList.remove('hidden'); return;
     }
     if (e.akkoord) {

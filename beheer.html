@@ -154,6 +154,44 @@
     return k;
   }
 
+  // ---- Partnerlinks: nieuwe link per familie + telling per partner voor de maandfactuur ----
+  const PARTNER_PRIJS = 15, GRATIS = 3; // excl. btw per afgeronde link; eerste 3 per partner gratis
+  function partnerBlok(zelf) {
+    const partners = {};
+    zelf.filter((o) => o.Partner).forEach((o) => {
+      const p = partners[o.Partner] = partners[o.Partner] || { email: o.Contact, totaal: 0, maand: [] };
+      if (/^Geleverd/.test(o.Download || '')) {
+        p.totaal++;
+        const m = /Geleverd (\d{1,2})-(\d{1,2})-(\d{4})/.exec(o.Download);
+        const nu = new Date();
+        if (m && +m[2] === nu.getMonth() + 1 && +m[3] === nu.getFullYear()) p.maand.push({ code: o.Code, nr: p.totaal });
+      }
+    });
+    const rijen = Object.entries(partners).map(([naam, p]) => {
+      const tellen = p.maand.filter((x) => x.nr > GRATIS).length;
+      return `<tr><td>${esc(naam)}</td><td>${p.maand.length} deze maand</td><td>${tellen ? tellen + ' × €' + PARTNER_PRIJS + ' = €' + tellen * PARTNER_PRIJS + ' excl. btw' : 'nog gratis'}</td><td class="code">${p.totaal} totaal</td></tr>`;
+    }).join('');
+    const k = el(`<div class="kaart"><div class="kop"><div><h2>Nieuwe partnerlink</h2><div class="code">Voor een uitvaartondernemer: per familie een link, zonder betaalstap. De eerste ${GRATIS} per partner gratis, daarna €${PARTNER_PRIJS} excl. btw per afgeronde link op de maandfactuur.</div></div></div>
+      <div class="rij"><input class="p-naam" list="p-lijst" placeholder="Partner, bijv. Mare Uitvaartbegeleiding" style="flex:1;min-width:220px"><datalist id="p-lijst">${Object.keys(partners).map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
+        <input class="p-mail" type="email" placeholder="E-mailadres partner" style="flex:1;min-width:200px"></div>
+      <div class="rij"><input class="p-fam" placeholder="Familie, bijv. Familie De Vries" style="flex:1;min-width:200px"><input class="p-datum" type="date">
+        <button type="button" class="p-maak">Maak en mail link</button></div>
+      ${rijen ? `<table style="width:100%;margin-top:12px;font-size:15px;border-collapse:collapse"><tr class="code"><td>Partner</td><td>Afgerond</td><td>Te factureren</td><td></td></tr>${rijen}</table>` : ''}
+      <div class="uit"></div></div>`);
+    const uit = k.querySelector('.uit');
+    k.querySelector('.p-naam').oninput = (e) => { const p = partners[e.target.value]; if (p && !k.querySelector('.p-mail').value) k.querySelector('.p-mail').value = p.email; };
+    k.querySelector('.p-maak').onclick = async (ev) => {
+      ev.target.disabled = true;
+      try {
+        toonUit(uit, await api({ actie: 'partnerlink', partner: k.querySelector('.p-naam').value, email: k.querySelector('.p-mail').value,
+          familie: k.querySelector('.p-fam').value, datum: k.querySelector('.p-datum').value }));
+        setTimeout(laad, 1500);
+      } catch (e) { toonFout(uit, e); }
+      ev.target.disabled = false;
+    };
+    return k;
+  }
+
   // ---- Verzamellinks (zelf maken) ----
   function vKaart(o) {
     const chip = (label, v) => `<span class="chip ${v ? 'ja' : ''}">${label}${v ? ': ' + esc(v) : ''}</span>`;
@@ -161,7 +199,7 @@
     const k = el(`<div class="kaart">
       <div class="kop"><div><h2>${esc(o.Naam || o.Code)}</h2><div class="code">${esc(o.Code)} · ${esc(o.Contact || 'geen contact')}${o['Datum uitvaart'] ? ' · uitvaart ' + esc(o['Datum uitvaart']) : ''}</div></div>
         ${o['Drive-map'] ? `<a href="${esc(o['Drive-map'])}" target="_blank">Drive-map →</a>` : ''}</div>
-      <div class="chips">${chip('Aangevraagd', (o.Aanvraag || '').replace(/ \(.*\)$/, ''))}${chip('Laatste upload', o['Upload ontvangen'])}${chip("Foto's", o["Aantal foto's"])}${chip('Download', d)}</div>
+      <div class="chips">${o.Partner ? chip('Partner', o.Partner) : ''}${chip('Aangevraagd', (o.Aanvraag || '').replace(/ \(.*\)$/, ''))}${chip('Laatste upload', o['Upload ontvangen'])}${chip("Foto's", o["Aantal foto's"])}${chip('Download', d)}</div>
       <div class="rij"><a href="${esc(o.Beheerlink || '#')}" target="_blank" class="licht" style="text-decoration:none;padding:10px 18px;border:1px solid #CFC4B4;border-radius:22px">Verzamelpagina van de klant →</a>
         ${o.Uploadlink ? `<a href="${esc(o.Uploadlink)}" target="_blank" class="code">Uploadlink</a>` : ''}</div>
       <div class="rij"><button type="button" class="licht omzet">${/^Geleverd/.test(d) ? 'Opnieuw omzetten en mailen' : 'Omzetten zonder betaling'}</button>
@@ -190,7 +228,9 @@
       const zelf = lijst.filter((o) => o.Pakket === 'Zelf maken'), films = lijst.filter((o) => o.Pakket !== 'Zelf maken');
       $('lijst').innerHTML = films.length ? '' : '<p class="code">Nog geen filmopdrachten.</p>';
       films.forEach((o) => $('lijst').appendChild(kaart(o)));
-      $('verzamel').innerHTML = zelf.length ? `<p class="code">${zelf.length} verzamellink(s). Status per link: aangevraagd → uploads → betaald → omgezet → geleverd.</p>` : '<p class="code">Nog geen verzamellinks.</p>';
+      $('verzamel').innerHTML = '';
+      $('verzamel').appendChild(partnerBlok(zelf));
+      $('verzamel').appendChild(el(zelf.length ? `<p class="code">${zelf.length} verzamellink(s). Status per link: aangevraagd → uploads → betaald → omgezet → geleverd.</p>` : '<p class="code">Nog geen verzamellinks.</p>'));
       zelf.forEach((o) => $('verzamel').appendChild(vKaart(o)));
       document.querySelector('#tabs [data-v="verzamel"]').textContent = 'Verzamellinks' + (zelf.length ? ` (${zelf.length})` : '');
     } catch (e) {

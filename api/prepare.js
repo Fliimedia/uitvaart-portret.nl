@@ -19,7 +19,7 @@ export default async (req, res) => {
     try {
       const o = (await leesOpdrachten(t)).find((r) => r.Code === c);
       if (o) eerder = { muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', akkoord: !!o['Akkoord voorwaarden'] && o['Akkoord voorwaarden'] !== 'NIET',
-        gesloten: /^(Betaald|Omzetten|Geleverd)/.test(o.Download || '') };
+        gesloten: /^(Betaald|Omzetten|Geleverd)/.test(o.Download || ''), partner: o.Partner || '' };
     } catch (e) { console.error('Status opdracht', e); }
     res.json({ folders, eerder });
   } catch (e) {

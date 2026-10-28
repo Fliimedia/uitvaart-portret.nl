@@ -74,9 +74,9 @@ uitvaart-portret.nl`;
         }
         const morgen = new Date(Date.now() + 864e5).toLocaleString('sv-SE', { timeZone: 'Europe/Amsterdam' }).slice(0, 10);
         if (!d && o['Datum uitvaart'] === morgen && isMail(o.Contact) && !/Herinnering afronden/.test(o.Notities || '')) {
-          const tekst = `Beste ${String(o.Naam || '').replace(/ \(voor .*\)$/, '')},
+          const tekst = `${o.Partner ? 'Hallo,' : 'Beste ' + String(o.Naam || '').replace(/ \(voor .*\)$/, '') + ','}
 
-Morgen is de uitvaart. Is iedereen klaar met het aanleveren van de foto’s? Dan kunt u het verzamelen afronden op uw beheerpagina:
+Morgen is de uitvaart${o.Partner ? ' van ' + o.Naam : ''}. Is iedereen klaar met het aanleveren van de foto’s? Dan kunt u het verzamelen afronden op uw beheerpagina:
 ${beheerLink(o.Code)}
 
 Daarna zetten wij alles om naar hetzelfde formaat, op volgorde genummerd, en krijgt u één downloadlink.

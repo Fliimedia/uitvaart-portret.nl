@@ -34,7 +34,7 @@ const maakCode = (naam, prefix = '') => {
 };
 // Korte links voor verzamellinks: /z/<code zonder zelf->.<12 tekens> (familie) en /b/… (aanvrager).
 const kortOf = (code) => String(code).startsWith('zelf-') ? String(code).slice(5) : '';
-const uploadLink = (code) => kortOf(code) ? `${SITE}/z/${kortOf(code)}.${sign(code).slice(0, 12)}`
+export const uploadLink = (code) => kortOf(code) ? `${SITE}/z/${kortOf(code)}.${sign(code).slice(0, 12)}`
   : `${SITE}/upload.html?c=${encodeURIComponent(code)}&s=${sign(code)}`;
 export const beheerLink = (code) => `${SITE}/b/${kortOf(code)}.${sign('beheer:' + code).slice(0, 12)}`;
 const knop = (href, tekst) => `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:18px 0"><tr><td style="border-radius:26px;background:#4B5A48"><a href="${href}" style="display:inline-block;padding:14px 26px;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">${tekst}</a></td></tr></table>`;
@@ -144,19 +144,25 @@ async function status(res, { c, b }) {
     perFase.push({ naam: f.naam.replace(/^\d+\s*/, ''), fotos: files.filter((x) => x.mimeType.startsWith('image/')).length,
       videos: files.filter((x) => x.mimeType.startsWith('video/')).length });
   }
-  res.json({ naam: voornaam(o), datum: o['Datum uitvaart'] || '', uploadlink: o.Uploadlink || uploadLink(c), perFase,
+  res.json({ naam: voornaam(o), partner: o.Partner || '', datum: o['Datum uitvaart'] || '', uploadlink: o.Uploadlink || uploadLink(c), perFase,
     muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekBestanden, download: o.Download || '', prijs: DOWNLOAD_PRIJS });
 }
 
 // ---- 3. Afsluiten en betalen ----
 async function afsluiten(res, { c, b, akkoord }) {
   if (!String(c).startsWith('zelf-') || !check('beheer:' + c, b)) return fail(res, 403, 'Deze beheerlink klopt niet');
-  if (!akkoord) return fail(res, 400, 'Vink eerst het akkoord aan');
-  if (!process.env.MOLLIE_API_KEY) return fail(res, 500, 'Betalen is even niet mogelijk. Mail info@uitvaart-portret.nl');
   const t = await googleToken();
   const o = await zoek(t, c);
   if (!o) return fail(res, 404, 'Deze verzamellink bestaat niet meer');
   if (/^(Betaald|Omzetten|Geleverd)/.test(o.Download || '')) return res.json({ status: o.Download });
+  // Partnerlink: geen betaling; Daan factureert per maand.
+  if (o.Partner) {
+    await logOpdracht(t, c, { Download: 'Betaald ' + nu() + ' (partner, op factuur)' });
+    await startOmzetten(t, { ...o, Download: 'Betaald' });
+    return res.json({ status: 'Omzetten' });
+  }
+  if (!akkoord) return fail(res, 400, 'Vink eerst het akkoord aan');
+  if (!process.env.MOLLIE_API_KEY) return fail(res, 500, 'Betalen is even niet mogelijk. Mail info@uitvaart-portret.nl');
   const terug = beheerLink(c) + '?terug=1';
   const p = await mollie('payments', { method: 'POST', body: JSON.stringify({
     amount: { currency: 'EUR', value: DOWNLOAD_PRIJS.toFixed(2) },
@@ -223,9 +229,10 @@ async function omgezet(res, { job, aantal, fouten }) {
   await drive(t, `files/${m.klant}/permissions`, { method: 'POST', body: JSON.stringify({ role: 'reader', type: 'anyone' }) });
   const link = 'https://drive.google.com/drive/folders/' + m.klant;
   const n = Math.max(0, parseInt(aantal, 10) || 0), mis = (Array.isArray(fouten) ? fouten : []).slice(0, 20).map((x) => kort(x, 150));
-  const tekst = `Beste ${voornaam(o)},
+  const partner = o.Partner || '';
+  const tekst = `${partner ? 'Hallo,' : 'Beste ' + voornaam(o) + ','}
 
-Dank u wel. Alles staat klaar om te downloaden:
+${partner ? 'De foto’s van ' + voornaam(o) + ' staan klaar om te downloaden:' : 'Dank u wel. Alles staat klaar om te downloaden:'}
 ${link}
 
 Klik rechtsboven op 'Alles downloaden'; Google maakt er een zip van.
@@ -234,12 +241,12 @@ In de map 'Klaar voor diashow' staan ${n} foto’s en filmpjes in breedbeeld (19
 
 Download alles op tijd: na 30 dagen worden de bestanden automatisch verwijderd.
 
-Merkt u toch dat het maken u te veel wordt, of wilt u net iets meer dan een diashow? Dan maak ik de film. De €${DOWNLOAD_PRIJS} van de download gaat eraf. Antwoord op deze mail, of bel of app 06 18 42 48 58.
+${partner ? 'Deze keer liever dat ik de film maak, bijvoorbeeld als het druk is of de familie iets meer wil dan een diashow? Alles staat al klaar. Antwoord op deze mail, of bel of app 06 18 42 48 58.' : `Merkt u toch dat het maken u te veel wordt, of wilt u net iets meer dan een diashow? Dan maak ik de film. De €${DOWNLOAD_PRIJS} van de download gaat eraf. Antwoord op deze mail, of bel of app 06 18 42 48 58.`}
 
 Met vriendelijke groet,
 Daan Lubbers
 uitvaart-portret.nl`;
-  if (isMail(o.Contact)) await mail({ to: o.Contact.trim(), subject: 'Uw foto’s staan klaar om te downloaden', text: tekst, html: mailHtml(tekst), replyTo: DAAN() });
+  if (isMail(o.Contact)) await mail({ to: o.Contact.trim(), subject: partner ? `Foto’s ${voornaam(o)} staan klaar om te downloaden` : 'Uw foto’s staan klaar om te downloaden', text: tekst, html: mailHtml(tekst), replyTo: DAAN() });
   await logOpdracht(t, c, { Download: 'Geleverd ' + nu() + ` (${n} bestanden${mis.length ? ', ' + mis.length + ' niet omgezet' : ''})`,
     'Drive-map': 'https://drive.google.com/drive/folders/' + m.klant });
   try {
@@ -247,4 +254,43 @@ uitvaart-portret.nl`;
     await mail({ to: DAAN(), subject: `Download geleverd: ${c}`, text: d, html: mailHtml(d) });
   } catch (e) { console.error('Melding download', e); }
   res.json({ ok: true });
+}
+
+// ---- 4. Partnerlink (vanuit beheer): voor een uitvaartondernemer, per familie, zonder betaalstap ----
+export async function maakPartnerlink({ partner, email, familie, datum }) {
+  partner = kort(partner, 80); email = kort(email, 120).toLowerCase(); familie = kort(familie, 80); datum = kort(datum, 40);
+  if (!partner || !isMail(email) || !familie) throw new Error('Vul partner, e-mailadres en familie in');
+  const code = maakCode(familie, 'zelf-');
+  const link = uploadLink(code), beheer = beheerLink(code);
+  const bericht = `Via deze link kunnen jullie de foto’s, filmpjes en muziek voor de uitvaart klaarzetten. Iedereen in de familie kan meedoen, vanaf elke telefoon of computer. Zet de foto’s in de periode waar ze bij horen; papieren foto’s kun je met de telefoon fotograferen. Voor de muziek is een titel genoeg.\n${link}`;
+  const wa = 'https://wa.me/?text=' + encodeURIComponent(bericht);
+  const tekst = `Hallo,
+
+De verzamellink voor ${familie} staat klaar.
+
+Stuur de familie dit bericht (kopiëren en plakken in WhatsApp of mail):
+
+${bericht}
+
+Uw verzamelpagina voor deze familie (alleen voor u):
+${beheer}
+Daar ziet u wat er binnen is. Is iedereen klaar? Klik dan op 'Iedereen is klaar'. Binnen een paar minuten krijgt u een mail met alles in jpg en mp4 (1920x1080), rechtgezet en op volgorde genummerd, ook de iPhone-foto’s.
+
+Met vriendelijke groet,
+Daan Lubbers
+uitvaart-portret.nl`;
+  const opmaak = html([
+    p('Hallo,'), p(`De verzamellink voor <b>${familie}</b> staat klaar.`),
+    p('Stuur de familie dit bericht (kopiëren en plakken in WhatsApp of mail):'),
+    `<div style="border-left:3px solid #4B5A48;padding:4px 0 4px 14px;margin:0 0 14px;color:#4A4F4C">${bericht.replace('\n', '<br>').replace(link, `<a href="${link}" style="color:#4B5A48">${link}</a>`)}</div>`,
+    knop(wa, 'Stuur via WhatsApp'),
+    p('Uw verzamelpagina voor deze familie (alleen voor u). Daar ziet u wat er binnen is, en klikt u op ‘Iedereen is klaar’ zodra de familie klaar is:'),
+    knop(beheer, 'Open de verzamelpagina'),
+    p('Binnen een paar minuten krijgt u dan een mail met alles in jpg en mp4 (1920x1080), rechtgezet en op volgorde genummerd, ook de iPhone-foto’s.'),
+    p('Met vriendelijke groet,<br>Daan Lubbers<br>uitvaart-portret.nl'),
+  ]);
+  await mail({ to: email, subject: `Verzamellink voor ${familie}`, text: tekst, html: opmaak, replyTo: DAAN() });
+  await logOpdracht(await googleToken(), code, { Naam: familie, Contact: email, 'Datum uitvaart': datum, Aanvraag: nu() + ' (partnerlink)',
+    Uploadlink: link, Pakket: 'Zelf maken', Partner: partner, 'Akkoord voorwaarden': 'n.v.t. (partner)' });
+  return { code, link, beheer };
 }

@@ -4,7 +4,7 @@ import {
   fail, googleToken, nu, logOpdracht, leesOpdrachten, mail, mailHtml, isMail, waNummer,
   filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, DOWNLOAD_PRIJS,
 } from './_lib.js';
-import { startOmzetten, beheerLink } from './link.js';
+import { startOmzetten, beheerLink, maakPartnerlink } from './link.js';
 
 const ok = (pw) => typeof pw === 'string' && process.env.ADMIN_PASSWORD && pw.length === process.env.ADMIN_PASSWORD.length &&
   crypto.timingSafeEqual(Buffer.from(pw), Buffer.from(process.env.ADMIN_PASSWORD));
@@ -31,6 +31,10 @@ export default async function handler(req, res) {
       const lijst = (await leesOpdrachten(t)).filter((o) => o.Code).reverse()
         .map((o) => (o.Pakket === 'Zelf maken' ? { ...o, Beheerlink: beheerLink(o.Code) } : o));
       return res.json({ lijst });
+    }
+    if (b.actie === 'partnerlink') {
+      const r = await maakPartnerlink(b);
+      return res.json({ ok: true, melding: `Verstuurd naar ${b.email}.`, link: r.link });
     }
     const order = (await leesOpdrachten(t)).find((o) => o.Code === b.code);
     if (!order) return fail(res, 404, 'Opdracht niet gevonden');
@@ -87,7 +91,7 @@ Bent u tevreden? Laat het me dan ook even weten. U ontvangt daarna de betaallink
       const extraFotos = parseInt(order["Extra foto's (boven 60)"], 10) || 0;
       const { regels, totaal } = berekenBedrag({ pakket: b.pakket, spoed: b.spoed, extraFotos,
         extraRondes: parseInt(b.extraRondes, 10) || 0, korteVersie: !!b.korteVersie,
-        verrekend: /^(Betaald|Omzetten|Geleverd)/.test(order.Download || '') ? DOWNLOAD_PRIJS : 0 });
+        verrekend: !order.Partner && /^(Betaald|Omzetten|Geleverd)/.test(order.Download || '') ? DOWNLOAD_PRIJS : 0 });
       if (!totaal) return fail(res, 400, 'Kies een pakket');
       const pl = await mollie('payment-links', { method: 'POST', body: JSON.stringify({
         description: `Fotofilm ${naam} [${order.Code}]`.slice(0, 255),
