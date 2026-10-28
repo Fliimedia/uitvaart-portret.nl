@@ -304,7 +304,7 @@ function run(argv) {
       if (!img) { fout.push(n + ' (kan niet openen)'); return; }
       var datum = LAATSTE_DATUM;
       // Gefotografeerde papieren foto: datum van vandaag. Recente datums tellen alleen mee in 'Later'.
-      if (datum > Date.now() - 60 * 864e5 && !/^Later/i.test(g.label)) datum = 0;
+      if (datum > Date.now() - 7 * 864e5 && !/^Later/i.test(g.label)) datum = 0;
       var d = size(img), m = Math.max(d.w, d.h);
       if (m > MAX) img = scale(img, MAX / m);
       var an = analyse(img);
