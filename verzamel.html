@@ -126,7 +126,8 @@
     $('titel').textContent = 'Uw verzameling' + (j.naam ? ', ' + j.naam : '');
     if (j.datum) $('sub').textContent = 'Hier ziet u wat de familie heeft aangeleverd. Uitvaart: ' + j.datum + '. Deze pagina is alleen voor u.';
     const prijs = j.prijsTekst || '€' + j.prijs, meer = (j.films || []).length > 1;
-    $('prijs').textContent = prijs + (meer && !j.partner ? ` (${j.films.length} films: €39 + €12,99 per extra film)` : '');
+    // Let op: bij een partner vervangt toon() de zin met #prijs; bij een tweede keer (na afronden of Vernieuwen) bestaat hij dan niet meer.
+    if ($('prijs')) $('prijs').textContent = prijs + (meer && !j.partner ? ` (${j.films.length} films: €39 + €12,99 per extra film)` : '');
     $('zelf-upload').href = j.uploadlink;
     let f = 0, v = 0;
     // Meerdere films (bijv. familie, vrienden, werk): per film een kop met totaal, de periodes en de muziek.
