@@ -296,9 +296,10 @@ async function omgezet(res, { job, aantal, fouten }) {
   if (!o) return fail(res, 404, 'Onbekend');
   if (/^Geleverd/.test(o.Download || '')) return res.json({ ok: true });
   const m = await mappen(t, c, o);
-  // Map delen: 'iedereen met de link mag bekijken' (copyRequiresWriterPermission werkt niet op mappen).
-  await drive(t, `files/${m.klant}/permissions`, { method: 'POST', body: JSON.stringify({ role: 'reader', type: 'anyone' }) });
-  const link = 'https://drive.google.com/drive/folders/' + m.klant;
+  // Alleen 'Klaar voor diashow' delen (iedereen met de link mag bekijken): geen originelen, en de zip blijft half zo groot.
+  const deelMap = m.diashow || m.klant;
+  await drive(t, `files/${deelMap}/permissions`, { method: 'POST', body: JSON.stringify({ role: 'reader', type: 'anyone' }) });
+  const link = 'https://drive.google.com/drive/folders/' + deelMap;
   const n = Math.max(0, parseInt(aantal, 10) || 0), mis = (Array.isArray(fouten) ? fouten : []).slice(0, 20).map((x) => kort(x, 150));
   const partner = o.Partner || '';
   const tekst = `${partner ? 'Hallo,' : 'Beste ' + voornaam(o) + ','}
@@ -308,7 +309,7 @@ ${link}
 
 Klik rechtsboven op 'Alles downloaden'; Google maakt er een zip van.
 
-${m.films.length > 1 ? `In de map 'Klaar voor diashow' staat voor elke film een eigen map (${m.films.map(filmLabel).join(', ')}). Samen ${n} foto’s en filmpjes` : `In de map 'Klaar voor diashow' staan ${n} foto’s en filmpjes`} in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd: eerst de portretfoto, dan de periodes van het leven, daarna de hobbyfoto’s en de foto’s waarvan de familie twijfelde. Sleep ze in één keer in uw programma, zoals PowerPoint of Photostage. De muziek staat in dezelfde map${m.films.length > 1 ? ' als de foto’s van die film' : ''}. De originelen staan per periode in de andere mappen.${mis.length ? `\n\nDeze bestanden konden we niet omzetten (de originelen staan er wel):\n${mis.join('\n')}` : ''}
+${m.films.length > 1 ? `Voor elke film is er een eigen map (${m.films.map(filmLabel).join(', ')}). Samen ${n} foto’s en filmpjes` : `Er staan ${n} foto’s en filmpjes klaar`} in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd: eerst de portretfoto, dan de periodes van het leven, daarna de hobbyfoto’s en de foto’s waarvan de familie twijfelde. Sleep ze in één keer in uw programma, zoals PowerPoint of Photostage. De muziek staat in dezelfde map${m.films.length > 1 ? ' als de foto’s van die film' : ''}.${mis.length ? `\n\nDeze bestanden konden we niet omzetten (de originelen staan er wel):\n${mis.join('\n')}` : ''}
 
 Download alles op tijd: na 30 dagen worden de bestanden automatisch verwijderd.
 
