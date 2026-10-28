@@ -76,6 +76,7 @@
     let h = '';
     if (res.link) h += `Link: <a href="${esc(res.link)}" target="_blank">${esc(res.link)}</a><br>`;
     if (res.href) h += `Betaallink (${euro(res.totaal)}): <a href="${esc(res.href)}" target="_blank">${esc(res.href)}</a><br>`;
+    if (res.melding) h += esc(res.melding);
     if (res.verstuurd === 'mail') h += '✓ Gemaild naar de klant.';
     else if (res.wa) h += `Geen e-mailadres bekend. <a class="wa" href="${esc(res.wa)}" target="_blank">Verstuur via WhatsApp</a>`;
     else if (res.tekst) h += 'Geen e-mailadres of 06-nummer bekend. Kopieer deze tekst:<pre style="white-space:pre-wrap">' + esc(res.tekst) + '</pre>';
@@ -93,6 +94,7 @@
       <div class="rij"><span><input type="file" accept="video/*" class="film" hidden><button type="button" class="licht kies">1. Film uploaden</button></span>
         <div class="balk"><div></div></div></div>
       <div class="rij"><button type="button" class="concept">2. Concept versturen</button></div>
+      ${String(o.Code).startsWith('zelf-') ? `<div class="rij"><button type="button" class="licht omzet">Verzamellink: omzetten zonder betaling</button> <span class="code">${esc(o.Download || '')}</span></div>` : ''}
       <details><summary>3. Betaallink versturen</summary>
         <div class="rij">
           <select class="pakket"><option value="">Pakket…</option><option>Klassiek</option><option>Modern</option></select>
@@ -131,6 +133,13 @@
       if (!confirm('Concept naar ' + (o.Naam || o.Code) + ' versturen?')) return;
       ev.target.disabled = true;
       try { toonUit(uit, await api({ actie: 'concept', code: o.Code })); } catch (e) { toonFout(uit, e); }
+      ev.target.disabled = false;
+    };
+    const om = k.querySelector('.omzet');
+    if (om) om.onclick = async (ev) => {
+      if (!confirm('Alles omzetten en de downloadlink mailen, zonder betaling?')) return;
+      ev.target.disabled = true;
+      try { toonUit(uit, await api({ actie: 'omzet', code: o.Code })); } catch (e) { toonFout(uit, e); }
       ev.target.disabled = false;
     };
     k.querySelector('.betaal').onclick = async (ev) => {

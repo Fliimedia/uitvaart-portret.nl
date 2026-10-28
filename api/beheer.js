@@ -4,6 +4,7 @@ import {
   fail, googleToken, nu, logOpdracht, leesOpdrachten, mail, mailHtml, isMail, waNummer,
   filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, DOWNLOAD_PRIJS,
 } from './_lib.js';
+import { startOmzetten } from './link.js';
 
 const ok = (pw) => typeof pw === 'string' && process.env.ADMIN_PASSWORD && pw.length === process.env.ADMIN_PASSWORD.length &&
   crypto.timingSafeEqual(Buffer.from(pw), Buffer.from(process.env.ADMIN_PASSWORD));
@@ -33,6 +34,13 @@ export default async function handler(req, res) {
     const order = (await leesOpdrachten(t)).find((o) => o.Code === b.code);
     if (!order) return fail(res, 404, 'Opdracht niet gevonden');
     const naam = order.Naam || '';
+    // Verzamellink: omzetten starten zonder betaling (test, of als gunst/handmatige levering).
+    if (b.actie === 'omzet') {
+      if (!String(order.Code).startsWith('zelf-')) return fail(res, 400, 'Alleen voor verzamellinks');
+      await logOpdracht(t, order.Code, { Download: 'Betaald ' + nu() + ' (handmatig vanuit beheer)' });
+      await startOmzetten(t, order);
+      return res.json({ ok: true, melding: 'Omzetten gestart. Binnen een paar minuten gaat de downloadmail naar ' + (order.Contact || 'de aanvrager') + '.' });
+    }
 
     if (b.actie === 'filmStart') {
       if (!/^video\//.test(String(b.mime))) return fail(res, 400, 'Alleen videobestanden');
