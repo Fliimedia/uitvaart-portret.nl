@@ -174,7 +174,8 @@ export async function startOmzetten(t, o, { opnieuw = false } = {}) {
   const c = o.Code;
   // Niet dubbel starten: loopt er al een omzetting van minder dan 20 minuten oud, dan niets doen.
   const bezig = /^Omzetten (\d{4}-\d{2}-\d{2} \d{2}:\d{2})/.exec(o.Download || '');
-  if (bezig && !opnieuw && Date.now() - Date.parse(bezig[1].replace(' ', 'T') + ':00+01:00') < 20 * 60e3) return true;
+  const muur = (x) => Date.parse(x.replace(' ', 'T') + ':00Z'); // beide in Nederlandse tijd, dus het verschil klopt
+  if (bezig && !opnieuw && muur(nuIso()) - muur(bezig[1]) < 20 * 60e3) return true;
   if (!OMZET_URL) {
     await logOpdracht(t, c, { Download: 'Betaald ' + nu() + ' – omzetserver nog niet ingesteld' });
     await mail({ to: DAAN(), subject: `Download betaald, maar omzetserver ontbreekt: ${c}`, text: `Zet de foto's van ${c} handmatig klaar, of stel de omzetserver in.`,
