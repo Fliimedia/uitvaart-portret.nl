@@ -97,7 +97,8 @@
 
     <section class="box hidden" id="geleverd">
       <h2>De download staat klaar</h2>
-      <p id="geleverd-tekst">We hebben u de downloadlink gemaild. Niets ontvangen? Kijk ook bij ongewenste mail, of mail naar <a href="mailto:info@uitvaart-portret.nl">info@uitvaart-portret.nl</a>.</p>
+      <p class="rij hidden" id="dl-rij" style="margin:4px 0 14px"><a class="knop" id="dl-knop" href="#">Naar de download</a></p>
+      <p id="geleverd-tekst">We hebben u de downloadlink ook gemaild. Niets ontvangen? Kijk ook bij ongewenste mail, of mail naar <a href="mailto:info@uitvaart-portret.nl">info@uitvaart-portret.nl</a>.</p>
     </section>
 
     <section class="box warm">
@@ -155,6 +156,7 @@
     $('delen-box').classList.toggle('hidden', klaar || bezig);
     $('bezig').classList.toggle('hidden', !bezig);
     $('geleverd').classList.toggle('hidden', !klaar);
+    $('dl-rij').classList.toggle('hidden', !j.downloadlink); if (j.downloadlink) $('dl-knop').href = j.downloadlink;
     if (j.partner) {
       // Partner: geen betaling en geen voorwaarden-vinkje; Daan factureert per maand.
       $('akkoord').closest('label').classList.add('hidden');

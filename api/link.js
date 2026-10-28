@@ -19,6 +19,7 @@ export default async function handler(req, res) {
     if (b.actie === 'status') return await status(res, b);
     if (b.actie === 'beheerlink') return await stuurBeheerlink(res, b);
     if (b.actie === 'galerij') return await galerij(res, b);
+    if (b.actie === 'download') return await downloadInfo(res, b);
     if (b.actie === 'afsluiten') return await afsluiten(res, b);
     if (b.actie === 'token') return await omzetToken(res, b);
     if (b.actie === 'omgezet') return await omgezet(res, b);
@@ -39,6 +40,10 @@ const kortOf = (code) => String(code).startsWith('zelf-') ? String(code).slice(5
 export const uploadLink = (code) => kortOf(code) ? `${SITE}/z/${kortOf(code)}.${sign(code).slice(0, 12)}`
   : `${SITE}/upload.html?c=${encodeURIComponent(code)}&s=${sign(code)}`;
 export const kijkLink = (code) => `${SITE}/k/${kortOf(code)}.${sign('kijk:' + code).slice(0, 12)}`;
+// Downloadpagina na het omzetten: /d/<code zonder zelf->.<12 tekens>
+export const downloadLink = (code) => `${SITE}/d/${kortOf(code)}.${sign('download:' + code).slice(0, 12)}`;
+const DOWNLOADS = 'Downloads'; // map in de klantmap met één zip per film (gemaakt door de omzetserver)
+const zipUrl = (id) => `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`;
 export const beheerLink = (code) => `${SITE}/b/${kortOf(code)}.${sign('beheer:' + code).slice(0, 12)}`;
 const knop = (href, tekst) => `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:18px 0"><tr><td style="border-radius:26px;background:#4B5A48"><a href="${href}" style="display:inline-block;padding:14px 26px;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">${tekst}</a></td></tr></table>`;
 const html = (delen) => `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#25292A;max-width:560px">${delen.join('')}</div>`;
@@ -214,7 +219,7 @@ async function status(res, { c, b }) {
   }
   const prijs = downloadPrijs(films.length);
   res.json({ naam: voornaam(o), partner: o.Partner || '', datum: o['Datum uitvaart'] || '', uploadlink: o.Uploadlink || uploadLink(c), perFase, films,
-    muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekBestanden, download: o.Download || '', prijs, prijsTekst: euro(prijs), kijklink: kijkLink(c) });
+    muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekBestanden, download: o.Download || '', prijs, prijsTekst: euro(prijs), kijklink: kijkLink(c), downloadlink: /^Geleverd/.test(o.Download || '') ? downloadLink(c) : '' });
 }
 
 // ---- 3. Afsluiten en betalen ----
@@ -265,7 +270,7 @@ export async function startOmzetten(t, o, { opnieuw = false } = {}) {
   await logOpdracht(t, c, { Download: 'Omzetten ' + nuIso() });
   const r = await fetch(OMZET_URL.replace(/\/$/, '') + '/omzetten', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(45000),
-    body: JSON.stringify({ job, code: c, ...m, terug: SITE + '/api/link' }),
+    body: JSON.stringify({ job, code: c, naam: voornaam(o), ...m, downloads: await folder(t, DOWNLOADS, m.klant), terug: SITE + '/api/link' }),
   }).catch((e) => {
     // Opstarten van de server kan even duren; de opdracht is dan meestal wel aangekomen. Het vangnet van de dagtaak pakt het anders op.
     if (e.name === 'TimeoutError' || e.name === 'AbortError') return { ok: true, traag: true };
@@ -288,7 +293,7 @@ async function omzetToken(res, { job }) {
 }
 
 // De omzetserver is klaar: map delen en de downloadlink mailen.
-async function omgezet(res, { job, aantal, fouten }) {
+async function omgezet(res, { job, aantal, fouten, zips }) {
   const c = checkJob(job);
   if (!c) return fail(res, 403, 'Ongeldige opdracht');
   const t = await googleToken();
@@ -299,7 +304,15 @@ async function omgezet(res, { job, aantal, fouten }) {
   // Alleen 'Klaar voor diashow' delen (iedereen met de link mag bekijken): geen originelen, en de zip blijft half zo groot.
   const deelMap = m.diashow || m.klant;
   await drive(t, `files/${deelMap}/permissions`, { method: 'POST', body: JSON.stringify({ role: 'reader', type: 'anyone' }) });
-  const link = 'https://drive.google.com/drive/folders/' + deelMap;
+  const drivelink = 'https://drive.google.com/drive/folders/' + deelMap;
+  // Zips (één per film) delen; lukt dat, dan gaat de mail naar de downloadpagina, anders naar Drive.
+  let zipsOk = 0;
+  for (const z of (Array.isArray(zips) ? zips : []).slice(0, 6)) {
+    if (!z || !/^[\w-]{10,}$/.test(String(z.id || ''))) continue;
+    try { await drive(t, `files/${z.id}/permissions`, { method: 'POST', body: JSON.stringify({ role: 'reader', type: 'anyone' }) }); zipsOk++; }
+    catch (e) { console.error('Zip delen', c, e); }
+  }
+  const link = zipsOk ? downloadLink(c) : drivelink;
   const n = Math.max(0, parseInt(aantal, 10) || 0), mis = (Array.isArray(fouten) ? fouten : []).slice(0, 20).map((x) => kort(x, 150));
   const partner = o.Partner || '';
   const tekst = `${partner ? 'Hallo,' : 'Beste ' + voornaam(o) + ','}
@@ -307,9 +320,9 @@ async function omgezet(res, { job, aantal, fouten }) {
 ${partner ? 'De foto’s van ' + voornaam(o) + ' staan klaar om te downloaden:' : 'Dank u wel. Alles staat klaar om te downloaden:'}
 ${link}
 
-Klik rechtsboven op 'Alles downloaden'; Google maakt er een zip van.
+${zipsOk ? (m.films.length > 1 ? 'Per film is er één knop om te downloaden.' : 'Met één knop downloadt u alles in één keer.') + ' Het werkt het makkelijkst op een computer.' : "Klik rechtsboven op 'Alles downloaden'; Google maakt er een zip van."}
 
-${m.films.length > 1 ? `Voor elke film is er een eigen map (${m.films.map(filmLabel).join(', ')}). Samen ${n} foto’s en filmpjes` : `Er staan ${n} foto’s en filmpjes klaar`} in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd: eerst de portretfoto, dan de periodes van het leven, daarna de hobbyfoto’s en de foto’s waarvan de familie twijfelde. Sleep ze in één keer in uw programma, zoals PowerPoint of Photostage. De muziek staat in dezelfde map${m.films.length > 1 ? ' als de foto’s van die film' : ''}.${mis.length ? `\n\nDeze bestanden konden we niet omzetten (de originelen staan er wel):\n${mis.join('\n')}` : ''}
+${m.films.length > 1 ? `Voor elke film is er een eigen map (${m.films.map(filmLabel).join(', ')}). Samen ${n} foto’s en filmpjes` : `Er staan ${n} foto’s en filmpjes klaar`} in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd: eerst de portretfoto, dan de periodes van het leven, daarna de hobbyfoto’s en de foto’s waarvan de familie twijfelde. Sleep ze in één keer in uw programma, zoals PowerPoint of Photostage. De muziek zit erbij${m.films.length > 1 ? ', per film' : ''}.${mis.length ? `\n\nDeze bestanden konden we niet omzetten (de originelen staan er wel):\n${mis.join('\n')}` : ''}
 
 Download alles op tijd: na 30 dagen worden de bestanden automatisch verwijderd.
 
@@ -392,6 +405,25 @@ async function galerij(res, { c, b, k }) {
   }
   const { fases, muziek } = films[0];
   res.json({ naam: voornaam(o), partner: o.Partner || '', fases, muziek, films: films.length > 1 ? films : undefined, titels: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', gesloten: /^(Betaald|Omzetten|Geleverd)/.test(o.Download || '') });
+}
+
+// Downloadpagina: per film een zip; daarna (30 dagen na het omzetten) verlopen.
+async function downloadInfo(res, { c, d }) {
+  if (!String(c).startsWith('zelf-') || !check('download:' + c, d)) return fail(res, 403, 'Deze downloadlink klopt niet');
+  const t = await googleToken();
+  const o = await zoek(t, c);
+  const verlopen = () => res.json({ verlopen: true, naam: o ? voornaam(o) : '', partner: (o && o.Partner) || '' });
+  if (!o || !/^Geleverd/.test(o.Download || '')) return o && /^(Betaald|Omzetten)/.test(o.Download || '') ? res.json({ bezig: true, naam: voornaam(o), partner: o.Partner || '' }) : verlopen();
+  const klant = await folder(t, c, await rootMap(t));
+  const binnen = await submappen(t, klant);
+  const map = (binnen[DOWNLOADS] || [])[0];
+  const diashow = (binnen[DIASHOW] || [])[0];
+  const zips = map ? (await drive(t, 'files?pageSize=20&orderBy=name&fields=files(id,name,size,createdTime)&q=' + encodeURIComponent(`'${map}' in parents and trashed=false`))).files : [];
+  if (!zips.length && !diashow) return verlopen();
+  // Zonder zips (oudere leveringen): alleen de Drive-map.
+  const tot = zips.length ? new Date(Date.parse(zips[0].createdTime) + 30 * 864e5).toLocaleDateString('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'long' }) : '';
+  res.json({ naam: voornaam(o), partner: o.Partner || '', tot, drive: diashow ? 'https://drive.google.com/drive/folders/' + diashow : '',
+    films: zips.map((z) => ({ naam: z.name.replace(/\.zip$/i, '').replace(/^.* – (Film \d+)/, '$1').replace(/^.* – Klaar voor diashow$/, 'Alle foto’s en filmpjes'), mb: Math.max(1, Math.round((+z.size || 0) / 1e6)), url: zipUrl(z.id) })) });
 }
 
 // Eén voorbeeldplaatje (klein, via Drive-thumbnail). Alleen met een geldige handtekening per bestand.

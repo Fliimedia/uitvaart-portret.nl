@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<base href="/">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Download – Uitvaart portret</title>
+<link rel="icon" href="assets/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..500&amp;family=Instrument+Sans:wght@400;500;600&amp;display=swap">
+<style>
+  :root { --bg:#F3EEE6; --card:#FBF8F3; --line:#E2D9CC; --ink:#25292A; --muted:#4A4F4C; --green:#4B5A48; --warm:#EFE9DF; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:'Instrument Sans','Helvetica Neue',sans-serif; font-size:17px; line-height:1.55; }
+  main { max-width:760px; margin:0 auto; padding:32px 16px 80px; }
+  header img { height:34px; }
+  h1, h2 { font-family:'Newsreader',Georgia,serif; font-weight:400; margin:0; }
+  h1 { font-size:clamp(30px,6vw,44px); line-height:1.1; margin:28px 0 10px; }
+  h2 { font-size:26px; margin-bottom:10px; }
+  p { margin:0 0 12px; }
+  .muted { color:var(--muted); }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:24px; margin:18px 0; }
+  .warm { background:var(--warm); border-color:var(--warm); }
+  table { width:100%; border-collapse:collapse; font-size:16px; }
+  td, th { padding:9px 0; border-top:1px solid var(--line); text-align:left; }
+  th { font-weight:600; color:var(--muted); font-size:14px; border-top:0; }
+  td.n, th.n { text-align:right; width:90px; }
+  .knop { display:inline-flex; align-items:center; justify-content:center; min-height:52px; padding:0 24px; border-radius:26px; border:0; background:var(--green); color:#fff; font:inherit; font-weight:600; cursor:pointer; text-decoration:none; }
+  .knop.licht { background:transparent; color:var(--green); border:1px solid var(--green); }
+  .knop:disabled { opacity:.45; cursor:default; }
+  .rij { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  label.akkoord { display:flex; gap:12px; align-items:flex-start; margin:14px 0 18px; font-size:15px; }
+  label.akkoord input { width:22px; height:22px; margin:2px 0 0; flex-shrink:0; accent-color:var(--green); }
+  .fout { color:#8A3B2E; }
+  .hidden { display:none !important; }
+  ul { padding-left:22px; margin:6px 0 14px; color:var(--muted); }
+  a { color:var(--ink); }
+  .film { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px 18px; padding:16px 0; border-top:1px solid var(--line); }
+  .film:first-of-type { border-top:0; padding-top:4px; }
+  .film strong { font-size:18px; }
+  ol { padding-left:22px; margin:6px 0 0; color:var(--muted); }
+  ol li { margin-bottom:6px; }
+</style>
+</head>
+<body>
+<main>
+  <header><a href="/"><img src="assets/logo-horizontaal.png" alt="Uitvaart portret"></a></header>
+  <p id="laden" class="muted" style="margin-top:28px">Even laden…</p>
+  <section id="ongeldig" class="box hidden"><h2 id="ongeldig-kop">Deze link werkt niet</h2><p id="ongeldig-tekst">Gebruik de link uit de e-mail. Lukt het niet? Bel of app <a href="tel:+31618424858">06 18 42 48 58</a> of mail <a href="mailto:info@uitvaart-portret.nl">info@uitvaart-portret.nl</a>.</p></section>
+  <div id="pagina" class="hidden">
+    <p class="muted" id="van" style="margin:28px 0 0;font-weight:600"></p>
+    <h1 id="titel">De foto’s staan klaar</h1>
+    <p class="muted" id="intro">Alle foto’s en filmpjes in breedbeeld (1920×1080), rechtgezet en op volgorde genummerd, met de muziek erbij.</p>
+    <section class="box" id="films"></section>
+    <section class="box warm">
+      <h2>Zo gebruikt u het</h2>
+      <ol>
+        <li>Download op een computer en open het zip-bestand (dubbelklikken). Er komt een map met alle bestanden.</li>
+        <li>De bestanden zijn genummerd: eerst de portretfoto, dan de periodes van het leven, daarna hobby’s en de twijfelgevallen. Sorteer op naam, dan klopt de volgorde.</li>
+        <li>Sleep alles in één keer in PowerPoint, Photostage of het programma van de uitvaartlocatie. De muziek staat in dezelfde map.</li>
+      </ol>
+      <p class="muted" id="tot" style="margin-top:14px"></p>
+      <p class="muted hidden" id="drive-rij">Liever los per bestand? <a id="drive" href="#" target="_blank" rel="noopener">Bekijk de map in Google Drive</a>.</p>
+    </section>
+  </div>
+</main>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (x) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
+  const m = location.pathname.match(/^\/d\/([a-z0-9-]+)\.([0-9a-f]{12,24})\/?$/);
+  const fout = (kop, tekst) => { $('laden').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); if (kop) $('ongeldig-kop').textContent = kop; if (tekst) $('ongeldig-tekst').textContent = tekst; };
+  if (!m) return fout();
+  const c = 'zelf-' + m[1], d = m[2];
+  fetch('/api/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actie: 'download', c, d }) })
+    .then((r) => r.json().then((j) => { if (!r.ok) throw j; return j; }))
+    .then((j) => {
+      if (j.verlopen) return fout('Deze download is verlopen', 'De bestanden worden 30 dagen na het verzamelen automatisch verwijderd. Heeft u ze nog nodig? Bel of app 06 18 42 48 58 of mail info@uitvaart-portret.nl, dan kijken we wat er kan.');
+      if (j.bezig) return fout('Bijna klaar', 'De bestanden worden nog omgezet. Dat duurt meestal een paar minuten; u krijgt een mail zodra alles klaarstaat.');
+      $('laden').classList.add('hidden'); $('pagina').classList.remove('hidden');
+      $('titel').textContent = 'De foto’s' + (j.naam ? ' van ' + j.naam : '') + ' staan klaar';
+      $('van').textContent = j.partner ? 'Verzamellink van ' + j.partner : '';
+      const films = j.films || [];
+      $('films').innerHTML = films.length
+        ? (films.length > 1 ? '<h2>Per film één download</h2>' : '<h2>Download</h2>') + films.map((f) =>
+          `<div class="film"><div><strong>${esc(f.naam)}</strong><br><span class="muted">zip-bestand, ${f.mb} MB</span></div><a class="knop" href="${esc(f.url)}">Download</a></div>`).join('')
+        : '<h2>Download</h2><p>Alle bestanden staan in een map in Google Drive. Klik daar rechtsboven op ‘Alles downloaden’.</p>' + (j.drive ? `<a class="knop" href="${esc(j.drive)}" target="_blank" rel="noopener">Open de map</a>` : '');
+      $('tot').textContent = j.tot ? 'Te downloaden tot ' + j.tot + '. Daarna worden de bestanden automatisch verwijderd.' : 'Na 30 dagen worden de bestanden automatisch verwijderd.';
+      if (j.drive && films.length) { $('drive').href = j.drive; $('drive-rij').classList.remove('hidden'); }
+    })
+    .catch((e) => fout('', e && e.error ? e.error + '. Bel of app 06 18 42 48 58.' : ''));
+})();
+</script>
+</body>
+</html>

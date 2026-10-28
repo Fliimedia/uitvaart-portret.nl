@@ -17,6 +17,10 @@
     {
       "source": "/k/:id",
       "destination": "/kijk.html"
+    },
+    {
+      "source": "/d/:id",
+      "destination": "/download.html"
     }
   ],
   "functions": {

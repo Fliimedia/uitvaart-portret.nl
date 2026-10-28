@@ -128,6 +128,7 @@ function drive(opdracht) {
       if (!r.ok || !url) throw new Error('Upload start ' + r.status);
       const u = await fetch(url, { method: 'PUT', headers: { 'Content-Length': String(size), 'Content-Type': mime }, body: createReadStream(bestand), duplex: 'half' });
       if (!u.ok) throw new Error('Upload ' + u.status);
+      return ((await u.json().catch(() => ({}))) || {}).id || '';
     },
     kopieer: (id, map, naam) => api(`files/${id}/copy?fields=id`, { method: 'POST', body: JSON.stringify({ name: naam, parents: [map] }) }),
     weg: (id) => api(`files/${id}`, { method: 'PATCH', body: JSON.stringify({ trashed: true }) }),
@@ -141,7 +142,8 @@ async function pool(items, n, fn) {
 
 // ---------- De opdracht ----------
 // Eén film: de vakken van die film ophalen, op volgorde zetten, omzetten en in zijn diashowmap zetten.
-async function verwerkFilm(d, tmp, film, fouten) {
+// zipMap: als die er is, blijven de omgezette bestanden (en de muziek) daar staan voor de zip van deze film.
+async function verwerkFilm(d, tmp, film, fouten, zipMap) {
   let aantal = 0;
   const MAP = 'application/vnd.google-apps.folder';
   for (const f of await d.lijst(film.diashow)) if (f.mimeType !== MAP) await d.weg(f.id); // opnieuw proberen: map eerst leeg
@@ -178,6 +180,7 @@ async function verwerkFilm(d, tmp, film, fouten) {
       if (vid) await video(x.bestand, uit); else await foto(x.bestand, uit, isHeic(x.f));
       await d.zet(film.diashow, naam + (vid ? '.mp4' : '.jpg'), vid ? 'video/mp4' : 'image/jpeg', uit);
       aantal++;
+      if (zipMap) { await fs.rename(uit, path.join(zipMap, naam + (vid ? '.mp4' : '.jpg'))); }
     } catch (e) { fouten.push(x.f.name); console.error('Omzetten', x.f.name, e.message); }
     await fs.rm(uit, { force: true }); await fs.rm(x.bestand, { force: true });
   };
@@ -185,9 +188,14 @@ async function verwerkFilm(d, tmp, film, fouten) {
   await pool(plan.filter((p) => p.x.f.mimeType.startsWith('video/')), 1, doe);
   // 4. Muziek en MUZIEK.txt erbij (kopie in Drive, zonder downloaden)
   for (const [k, f] of muziek.entries()) {
-    try { await d.kopieer(f.id, film.diashow, 'muziek ' + (k + 1) + ' - ' + f.name.replace(/^MUZIEK \d+ - /, '')); } catch (e) { fouten.push(f.name); }
+    const naam = 'muziek ' + (k + 1) + ' - ' + f.name.replace(/^MUZIEK \d+ - /, '');
+    try { await d.kopieer(f.id, film.diashow, naam); } catch (e) { fouten.push(f.name); }
+    if (zipMap) try { await d.haal(f.id, path.join(zipMap, naam.replace(/[\/\\]/g, '_'))); } catch (e) {}
   }
-  for (const f of (await d.lijst(film.map)).filter((x) => x.name === 'MUZIEK.txt')) { try { await d.kopieer(f.id, film.diashow, 'MUZIEK.txt'); } catch (e) {} }
+  for (const f of (await d.lijst(film.map)).filter((x) => x.name === 'MUZIEK.txt')) {
+    try { await d.kopieer(f.id, film.diashow, 'MUZIEK.txt'); } catch (e) {}
+    if (zipMap) try { await d.haal(f.id, path.join(zipMap, 'MUZIEK.txt')); } catch (e) {}
+  }
   return aantal;
 }
 
@@ -198,13 +206,32 @@ export async function verwerk(o) {
   const fouten = [];
   let aantal = 0;
   const films = Array.isArray(o.films) && o.films.length ? o.films : [{ nr: 1, map: o.klant, fases: o.fases, diashow: o.diashow }];
+  const zips = [];
   try {
     if (films.length > 1) for (const f of await d.lijst(o.diashow)) if (f.mimeType !== 'application/vnd.google-apps.folder') await d.weg(f.id); // resten van een eerdere enkele film
-    for (const film of films) aantal += await verwerkFilm(d, tmp, film, fouten);
+    if (o.downloads) for (const f of await d.lijst(o.downloads)) await d.weg(f.id); // oude zips weg
+    for (const film of films) {
+      // Per film één zip (zonder extra compressie: jpg en mp4 zijn al gecomprimeerd) voor de downloadpagina.
+      const label = films.length > 1 ? `Film ${film.nr || 1}` + (film.naam ? ' – ' + film.naam : '') : 'Klaar voor diashow';
+      const veilig = label.replace(/[\/\\:*?"<>|]/g, ' ').trim();
+      const zipMap = o.downloads ? path.join(tmp, 'zip-' + (film.nr || 1), veilig) : null;
+      if (zipMap) await fs.mkdir(zipMap, { recursive: true });
+      aantal += await verwerkFilm(d, tmp, film, fouten, zipMap);
+      if (!zipMap) continue;
+      try {
+        const zipNaam = ((o.naam ? o.naam + ' – ' : '') + veilig).replace(/[\/\\:*?"<>|]/g, ' ').trim() + '.zip';
+        const zipPad = path.join(tmp, 'film-' + (film.nr || 1) + '.zip');
+        await run('zip', ['-0', '-r', '-q', zipPad, veilig], { cwd: path.dirname(zipMap), maxBuffer: 1e7 });
+        const { size } = await fs.stat(zipPad);
+        const id = await d.zet(o.downloads, zipNaam, 'application/zip', zipPad);
+        zips.push({ nr: film.nr || 1, naam: film.naam || '', id, size });
+        await fs.rm(path.dirname(zipMap), { recursive: true, force: true }); await fs.rm(zipPad, { force: true });
+      } catch (e) { console.error('Zip mislukt', o.code, film.nr, e.message); }
+    }
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
-  const r = await fetch(o.terug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actie: 'omgezet', job: o.job, aantal, fouten }) });
+  const r = await fetch(o.terug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actie: 'omgezet', job: o.job, aantal, fouten, zips }) });
   console.log('Klaar', o.code, films.length, 'film(s),', aantal, 'omgezet,', fouten.length, 'fouten, terugmelding', r.status);
 }
 

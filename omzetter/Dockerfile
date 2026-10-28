@@ -5,7 +5,7 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libheif-examples libheif-plugin-libde265 ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libheif-examples libheif-plugin-libde265 zip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json ./
