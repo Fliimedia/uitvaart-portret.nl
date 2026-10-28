@@ -109,6 +109,7 @@
     <h2>Dank u wel</h2>
     <p>Alle foto's zijn goed aangekomen. Daan gaat ermee aan de slag en neemt contact met u op zodra het concept klaar is. Heeft u ons uw e-mailadres gegeven, dan ontvangt u ook een bevestiging per mail.</p>
     <p class="delen"><button type="button" class="add licht deel-knop">Deel deze link met familie</button> <span>Hebben anderen nog foto's? Zij kunnen ze via dezelfde link toevoegen.</span></p>
+    <div class="akkoord zelf-upsell hidden" style="display:block"><strong>Toch liever dat Daan de film maakt?</strong><br>Uw foto's staan al klaar, u hoeft niets opnieuw te doen. Een fotofilm kost €249, met filmpjes erbij €299. <a href="tel:+31618424858">Bel</a>, <a href="https://wa.me/31618424858">app</a> of <a href="mailto:info@uitvaart-portret.nl?subject=Film%20laten%20maken">mail</a> Daan.</div>
   </section>
 
   <section id="mislukt" class="box hidden">
@@ -140,6 +141,14 @@
   if (!c || !s) { $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); return; }
 
   let akkoordTijd = null, items = [], portretId = null, nextId = 1, busy = false, failed = [];
+  // Gratis verzamellink (zelf maken): geen akkoord of betaling, wel genummerde bestanden en een downloadmail.
+  const ZELF = c.startsWith('zelf-');
+  if (ZELF) {
+    $('akkoord').checked = true; $('akkoord').closest('label').classList.add('hidden');
+    document.querySelector('#kiezen .intro').textContent = 'Zet de foto\'s per periode klaar; zo staat de volgorde al goed. U ontvangt daarna een mail om alles in één keer te downloaden, genummerd en op volgorde.';
+    document.querySelectorAll('.zelf-upsell').forEach(el => el.classList.remove('hidden'));
+    const k = document.querySelector('#klaar p'); if (k) k.textContent = 'Alles is goed aangekomen. U ontvangt zo een mail met een link om alles in één keer te downloaden.';
+  }
 
   const extMime = n => /\.(heic|heif)$/i.test(n) ? 'image/heic' : /\.(jpe?g)$/i.test(n) ? 'image/jpeg' : /\.mov$/i.test(n) ? 'video/quicktime' : '';
 
@@ -213,7 +222,7 @@
       });
     }
     const n = items.length;
-    $('telling').innerHTML = `<strong>${n}</strong> ${n === 1 ? 'foto' : "foto's"} · 60 inbegrepen` + (n > 60 ? ` · ${n - 60} extra` : '');
+    $('telling').innerHTML = `<strong>${n}</strong> ${n === 1 ? 'foto' : "foto's"}` + (ZELF ? '' : ' · 60 inbegrepen' + (n > 60 ? ` · ${n - 60} extra` : ''));
     const mOk = muziekOk();
     $('verstuur').disabled = n === 0 || busy || !$('akkoord').checked || !mOk;
     if (n > 0 && !mOk) $('telling').innerHTML += ' · <span style="color:#8A3B2E">vul de muziek in</span>';
@@ -323,12 +332,13 @@
   }
 
   $('verstuur').onclick = () => {
-    if (!portretId && !confirm('U heeft nog geen portretfoto gekozen. Toch versturen?')) return;
+    if (!ZELF && !portretId && !confirm('U heeft nog geen portretfoto gekozen. Toch versturen?')) return;
     const jobs = [];
     for (let f = 0; f < FASES.length; f++) {
       items.filter(i => i.fase === f).forEach((i, n) => {
         const tags = (i.star ? ' ★' : '') + (i.id === portretId ? ' PORTRET' : '');
-        jobs.push({ file: i.file, mime: i.mime, fase: f, name: String(n + 1).padStart(2, '0') + tags + ' - ' + i.file.name });
+        const nr = String(n + 1).padStart(ZELF ? 3 : 2, '0');
+        jobs.push({ file: i.file, mime: i.mime, fase: f, name: (ZELF ? (f === 4 ? 9 : f + 1) + '-' + nr : nr) + tags + ' - ' + i.file.name });
       });
     }
     muziekFiles.forEach((file, k) => jobs.push({ file, mime: file.type || 'audio/mpeg', fase: 0, audio: true, name: 'MUZIEK ' + (k + 1) + ' - ' + file.name }));

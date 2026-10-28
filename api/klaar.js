@@ -1,6 +1,6 @@
 // Stuurt Daan een mail zodra een familie foto's heeft verstuurd, met een link naar de Drive-map.
 import { Resend } from 'resend';
-import { ROOT_NAME, rootMap, FASES, check, googleToken, folder, fail, nu, logVeilig, leesOpdrachten, isMail, mail as stuurMail, mailHtml } from './_lib.js';
+import { ROOT_NAME, rootMap, FASES, check, googleToken, folder, fail, nu, logVeilig, leesOpdrachten, isMail, mail as stuurMail, mailHtml, deel } from './_lib.js';
 
 const FROM = 'Uitvaart portret <info@uitvaart-portret.nl>';
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -59,11 +59,13 @@ export default async function handler(req, res) {
     ? new Date(t0).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', dateStyle: 'long', timeStyle: 'short' })
     : '';
 
-  let map = '';
+  const zelf = c.startsWith('zelf-');
+  let map = '', download = '';
   try {
     const t = await googleToken();
     const id = await folder(t, c, await rootMap(t));
     map = 'https://drive.google.com/drive/folders/' + id;
+    if (zelf) download = await deel(t, id, true);
     if (akkoord) await bewijs(t, id, c, akkoord);
     if (muziekRegels.length) await tekstbestand(t, id, 'MUZIEK.txt', `Klant/opdracht: ${c}\n\nMuziek:\n${muziekTekst}\n`);
   } catch (e) {
@@ -78,7 +80,24 @@ export default async function handler(req, res) {
 
   // Bevestiging aan de familie (contactpersoon van de aanvraag), zwart op wit.
   try {
-    if (o && isMail(o.Contact) && totaal > 0) {
+    if (zelf && o && isMail(o.Contact) && totaal > 0 && download) {
+      const tekstZ = `Beste ${o.Naam ? o.Naam.replace(/ \(voor .*\)$/, '') : ''},
+
+Er ${totaal === 1 ? 'is 1 bestand' : 'zijn ' + totaal + ' bestanden'} toegevoegd via uw verzamellink${eerderAantal ? ' (in totaal nu ' + nieuwTotaal + ')' : ''}.
+
+Alles downloaden, genummerd en per periode op volgorde:
+${download}
+Klik rechtsboven op 'Alles downloaden'; Google maakt er een zip van. Sorteer de bestanden op naam, dan staan ze in de goede volgorde.${muziekRegels.length ? '\n\nMuziek:\n' + muziekRegels.join('\n') : ''}
+
+De foto's worden 30 dagen na het uploaden automatisch verwijderd. Download ze dus op tijd.
+
+Toch liever dat ik de film voor u maak? Uw foto's staan al klaar, dus u hoeft niets opnieuw te doen. Een fotofilm kost €249, met filmpjes erbij €299. Antwoord op deze mail of bel of app 06 18 42 48 58.
+
+Met vriendelijke groet,
+Daan Lubbers
+uitvaart-portret.nl`;
+      await stuurMail({ to: o.Contact.trim(), subject: "Uw foto's staan klaar om te downloaden", text: tekstZ, html: mailHtml(tekstZ), replyTo: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl' });
+    } else if (!zelf && o && isMail(o.Contact) && totaal > 0) {
       const naamF = o.Naam || '';
       const muziekZin = muziekRegels.length ? `\n\nMuziek:\n${muziekRegels.join('\n')}` : '';
       const tekstF = `Beste ${naamF},
@@ -97,7 +116,7 @@ uitvaart-portret.nl`;
   // Optellen bij eerdere uploads; eerder doorgegeven muziek en akkoord niet overschrijven.
   const muziekLog = [o && o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekRegels.join(' | ')].filter(Boolean).join(' | ');
   await logVeilig(c, { 'Upload ontvangen': nu(), "Aantal foto's": nieuwTotaal, "Extra foto's (boven 60)": Math.max(0, nieuwTotaal - 60),
-    'Akkoord voorwaarden': akkoord || (o && o['Akkoord voorwaarden']) || 'NIET', 'Drive-map': map, Muziek: muziekLog || 'NIET' });
+    'Akkoord voorwaarden': akkoord || (o && o['Akkoord voorwaarden']) || (zelf ? 'n.v.t. (zelf maken)' : 'NIET'), 'Drive-map': map, Muziek: muziekLog || 'NIET' });
 
   const rows = [
     ['Klant', c],
@@ -119,7 +138,7 @@ uitvaart-portret.nl`;
     const { error } = await resend.emails.send({
       from: FROM,
       to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl',
-      subject: `Foto's ontvangen: ${c} (${totaal})`,
+      subject: `${zelf ? 'Verzamellink (zelf maken)' : "Foto's ontvangen"}: ${c} (${totaal})`,
       text,
       html,
     });

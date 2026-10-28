@@ -5,7 +5,7 @@ export default async (req, res) => {
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
   const { c, s, folder, fsig, name, mime, size } = req.body || {};
   if (!check(c, s) || !check(c + ':' + folder, fsig)) return fail(res, 403, 'Ongeldige link');
-  if (!/^(image|video)\//.test(String(mime))) return fail(res, 400, 'Alleen foto\'s en video\'s');
+  if (!/^(image|video|audio)\//.test(String(mime))) return fail(res, 400, 'Alleen foto\'s, video\'s en muziek');
   if (!(size > 0 && size < 2e9)) return fail(res, 400, 'Bestand te groot');
   const safeName = String(name).replace(/[\/\\\u0000-\u001f]/g, '_').slice(0, 150);
   try {
