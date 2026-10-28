@@ -2,7 +2,7 @@
 import crypto from 'crypto';
 import {
   fail, googleToken, nu, logOpdracht, leesOpdrachten, mail, mailHtml, isMail, waNummer,
-  filmMap, nieuwsteFilm, deel, berekenBedrag, mollie,
+  filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, DOWNLOAD_PRIJS,
 } from './_lib.js';
 
 const ok = (pw) => typeof pw === 'string' && process.env.ADMIN_PASSWORD && pw.length === process.env.ADMIN_PASSWORD.length &&
@@ -72,7 +72,8 @@ Bent u tevreden? Laat het me dan ook even weten. U ontvangt daarna de betaallink
       if (!process.env.MOLLIE_API_KEY) return fail(res, 500, 'MOLLIE_API_KEY ontbreekt in Vercel');
       const extraFotos = parseInt(order["Extra foto's (boven 60)"], 10) || 0;
       const { regels, totaal } = berekenBedrag({ pakket: b.pakket, spoed: b.spoed, extraFotos,
-        extraRondes: parseInt(b.extraRondes, 10) || 0, korteVersie: !!b.korteVersie });
+        extraRondes: parseInt(b.extraRondes, 10) || 0, korteVersie: !!b.korteVersie,
+        verrekend: /^(Betaald|Omzetten|Geleverd)/.test(order.Download || '') ? DOWNLOAD_PRIJS : 0 });
       if (!totaal) return fail(res, 400, 'Kies een pakket');
       const pl = await mollie('payment-links', { method: 'POST', body: JSON.stringify({
         description: `Fotofilm ${naam} [${order.Code}]`.slice(0, 255),

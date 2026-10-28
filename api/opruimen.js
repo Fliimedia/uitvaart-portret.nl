@@ -5,6 +5,7 @@
 // De akkoordverklaring en het opdrachtenoverzicht blijven bewaard. Drive leegt de prullenbak zelf na 30 dagen.
 import { ROOT_NAME, rootMap, FASES, DIASHOW, googleToken, drive, folder, fail, logVeilig, nu, nuIso, leesOpdrachten, lever, mollie, mail, mailHtml, isMail, filmMap, logOpdracht } from './_lib.js';
 import { leads, volgende } from './partners.js';
+import { startOmzetten, beheerLink } from './link.js';
 
 const DAGEN = 30;
 
@@ -61,6 +62,33 @@ uitvaart-portret.nl`;
         await drive(t, `files/${map}`, { method: 'PATCH', body: JSON.stringify({ trashed: true }) });
         await logOpdracht(t, o.Code, { Notities: `${o.Notities ? o.Notities + '; ' : ''}Film opgeruimd ${nu()}` });
         gedaan.films.push(o.Code);
+      }
+      // Verzamellink: vangnet voor de omzetserver, en een herinnering de dag voor de uitvaart.
+      if (String(o.Code).startsWith('zelf-')) {
+        const d = o.Download || '';
+        const vast = /^Omzetten \d{4}-/.test(d) && dagenGeleden(d.slice(9, 25)) > 0.125;
+        if ((/^Betaald/.test(d) && !/ontbreekt/.test(d)) || vast) {
+          if (vast) await mail({ to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl', subject: `Omzetten lijkt vast te zitten: ${o.Code}`,
+            text: `De download van ${o.Code} is betaald maar nog niet geleverd. Ik probeer het opnieuw; kijk anders in Google Cloud Run.`, html: mailHtml(`De download van ${o.Code} is betaald maar nog niet geleverd. Ik probeer het opnieuw; kijk anders in Google Cloud Run.`) });
+          await startOmzetten(t, o); gedaan.omzet = (gedaan.omzet || 0) + 1;
+        }
+        const morgen = new Date(Date.now() + 864e5).toLocaleString('sv-SE', { timeZone: 'Europe/Amsterdam' }).slice(0, 10);
+        if (!d && o['Datum uitvaart'] === morgen && isMail(o.Contact) && !/Herinnering afronden/.test(o.Notities || '')) {
+          const tekst = `Beste ${String(o.Naam || '').replace(/ \(voor .*\)$/, '')},
+
+Morgen is de uitvaart. Is iedereen klaar met het aanleveren van de foto’s? Dan kunt u het verzamelen afronden op uw beheerpagina:
+${beheerLink(o.Code)}
+
+Daarna zetten wij alles om naar hetzelfde formaat, op volgorde genummerd, en krijgt u één downloadlink.
+
+Wordt het toch te veel? Bel of app 06 18 42 48 58, dan kijk ik of ik de film nog voor u kan maken.
+
+Veel sterkte,
+Daan Lubbers
+uitvaart-portret.nl`;
+          await mail({ to: o.Contact.trim(), subject: 'Morgen de uitvaart: is iedereen klaar met de foto’s?', text: tekst, html: mailHtml(tekst) });
+          await logOpdracht(t, o.Code, { Notities: `${o.Notities ? o.Notities + '; ' : ''}Herinnering afronden ${nu()}` });
+        }
       }
     } catch (e) { console.error('Dagtaak', o.Code, e); }
   }

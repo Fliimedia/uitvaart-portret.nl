@@ -1,5 +1,5 @@
 // Maakt (of vindt) de klantmap met vier fasemappen in Drive en geeft ondertekende map-id's terug.
-import { ROOT_NAME, rootMap, FASES, DIASHOW, sign, check, googleToken, folder, fail, leesOpdrachten } from './_lib.js';
+import { ROOT_NAME, rootMap, FASES, sign, check, googleToken, folder, fail, leesOpdrachten } from './_lib.js';
 
 export default async (req, res) => {
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
@@ -10,7 +10,7 @@ export default async (req, res) => {
     const root = await rootMap(t);
     const klant = await folder(t, c, root);
     const folders = [];
-    for (const name of String(c).startsWith('zelf-') ? [...FASES, DIASHOW] : FASES) {
+    for (const name of FASES) {
       const id = await folder(t, name, klant);
       folders.push({ id, sig: sign(c + ':' + id) });
     }
@@ -18,7 +18,8 @@ export default async (req, res) => {
     let eerder = { muziek: '', akkoord: false };
     try {
       const o = (await leesOpdrachten(t)).find((r) => r.Code === c);
-      if (o) eerder = { muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', akkoord: !!o['Akkoord voorwaarden'] && o['Akkoord voorwaarden'] !== 'NIET' };
+      if (o) eerder = { muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', akkoord: !!o['Akkoord voorwaarden'] && o['Akkoord voorwaarden'] !== 'NIET',
+        gesloten: /^(Betaald|Omzetten|Geleverd)/.test(o.Download || '') };
     } catch (e) { console.error('Status opdracht', e); }
     res.json({ folders, eerder });
   } catch (e) {

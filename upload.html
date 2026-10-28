@@ -146,13 +146,13 @@
   if (!c || !s) { $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); return; }
 
   let akkoordTijd = null, items = [], portretId = null, nextId = 1, busy = false, failed = [];
-  // Gratis verzamellink (zelf maken): geen akkoord of betaling, wel genummerde bestanden en een downloadmail.
+  // Verzamellink (zelf maken): geen akkoord of betaling hier; de aanvrager rondt af op verzamel.html.
   const ZELF = c.startsWith('zelf-');
   if (ZELF) {
     $('akkoord').checked = true; $('akkoord').closest('label').classList.add('hidden');
-    document.querySelector('#kiezen .intro').textContent = 'Zet de foto\'s per periode klaar; zo staat de volgorde al goed. U ontvangt daarna een mail om alles in één keer te downloaden, genummerd en op volgorde.';
     document.querySelectorAll('.zelf-upsell').forEach(el => el.classList.remove('hidden'));
-    const k = document.querySelector('#klaar p'); if (k) k.textContent = 'Alles is goed aangekomen. U ontvangt zo een mail met een link om alles in één keer te downloaden. In de map \'Klaar voor diashow\' staan de foto\'s in breedbeeld, op volgorde genummerd.';
+    const k = document.querySelector('#klaar p'); if (k) k.textContent = 'Uw foto\'s zijn toegevoegd. Hebben anderen nog foto\'s? Zij kunnen ze via dezelfde link toevoegen. Is iedereen klaar, dan rondt degene die de link heeft aangevraagd het af.';
+    document.querySelector('#kiezen .intro').textContent = 'Zet de foto\'s per periode klaar; zo staat de volgorde al goed.';
   }
 
   const extMime = n => /\.(heic|heif)$/i.test(n) ? 'image/heic' : /\.(jpe?g)$/i.test(n) ? 'image/jpeg' : /\.mov$/i.test(n) ? 'video/quicktime' : '';
@@ -215,24 +215,6 @@
       }
       render();
     }, 300);
-  }
-
-  // --- Breedbeeld 1920x1080 voor de diashow ---
-  // Liggend (ongeveer 3:2 tot 16:9): licht bijsnijden tot het beeld vol is. Staand, vierkant of heel breed: heel laten, met een wazige achtergrond.
-  async function breedbeeld(file) {
-    const bm = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    const W = 1920, H = 1080, r = bm.width / bm.height;
-    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-    const cx = cv.getContext('2d');
-    const dek = Math.max(W / bm.width, H / bm.height), past = Math.min(W / bm.width, H / bm.height);
-    const teken = (k) => cx.drawImage(bm, (W - bm.width * k) / 2, (H - bm.height * k) / 2, bm.width * k, bm.height * k);
-    if (r >= 1.45 && r <= 1.95) teken(dek);
-    else {
-      cx.filter = 'blur(40px) brightness(0.75)'; teken(dek * 1.1); cx.filter = 'none';
-      teken(past);
-    }
-    if (bm.close) bm.close();
-    return await new Promise((ok, nee) => cv.toBlob(b => b ? ok(b) : nee(new Error('jpeg')), 'image/jpeg', 0.9));
   }
 
   // --- Opnamedatum (alleen van echte digitale foto's) ---
@@ -352,6 +334,12 @@
       p.textContent = 'De muziek is al doorgegeven: ' + e.muziek + '. U hoeft hier niets in te vullen, maar mag wel iets toevoegen.';
       $('nummers').before(p);
     }
+    if (ZELF && e.gesloten) {
+      $('kiezen').classList.add('hidden'); $('bar').classList.add('hidden');
+      const o = $('ongeldig'); o.querySelector('h2').textContent = 'Het verzamelen is afgesloten';
+      o.querySelector('p').textContent = 'Degene die deze link heeft aangevraagd heeft het verzamelen afgerond. Heeft u nog foto\'s? Stuur ze dan rechtstreeks naar hem of haar.';
+      o.classList.remove('hidden'); return;
+    }
     if (e.akkoord) {
       $('akkoord').checked = true;
       const l = $('akkoord').closest('label');
@@ -428,19 +416,9 @@
     const NR = [1, 2, 3, 4, 6, 9];
     for (let f = 0; f < FASES.length; f++) {
       (await sorteerOpDatum(items.filter(i => i.fase === f))).forEach((i, n) => {
-        const tags = (i.star ? ' ★' : '') + (i.id === portretId ? ' PORTRET' : '');
+        const tags = (i.star ? ' ★' : '') + (i.id === portretId ? ' PORTRET' : '') + (i.afdruk ? ' AFDRUK' : '');
         const nr = String(n + 1).padStart(ZELF ? 3 : 2, '0');
         jobs.push({ file: i.file, mime: i.mime, fase: f, name: (ZELF ? NR[f] + '-' + nr : nr) + tags + ' - ' + i.file.name });
-      });
-    }
-    if (ZELF) {
-      // 'Klaar voor diashow': alle foto's 1920x1080 JPEG, rechtgezet en doorgenummerd (portret eerst, dan de periodes, hobby en twijfel als blok).
-      const D = FASES.length, fotos = jobs.filter(j => !j.audio && j.mime.startsWith('image/'));
-      const port = fotos.filter(j => j.name.includes('PORTRET'));
-      port.concat(fotos.filter(j => !j.name.includes('PORTRET'))).forEach((j, n) => {
-        const isP = j.name.includes('PORTRET');
-        const nr = isP ? '0-000' : NR[j.fase] + '-' + String(n + 1 - port.length).padStart(3, '0');
-        jobs.push({ file: j.file, mime: 'image/jpeg', fase: D, extra: true, name: nr + (isP ? ' portret' : '') + '.jpg', maak: () => breedbeeld(j.file) });
       });
     }
     muziekFiles.forEach((file, k) => jobs.push({ file, mime: file.type || 'audio/mpeg', fase: 0, audio: true, name: 'MUZIEK ' + (k + 1) + ' - ' + file.name }));

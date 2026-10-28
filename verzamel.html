@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Uw verzameling – Uitvaart portret</title>
+<link rel="icon" href="assets/favicon.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..500&amp;family=Instrument+Sans:wght@400;500;600&amp;display=swap">
+<style>
+  :root { --bg:#F3EEE6; --card:#FBF8F3; --line:#E2D9CC; --ink:#25292A; --muted:#4A4F4C; --green:#4B5A48; --warm:#EFE9DF; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:'Instrument Sans','Helvetica Neue',sans-serif; font-size:17px; line-height:1.55; }
+  main { max-width:760px; margin:0 auto; padding:32px 16px 80px; }
+  header img { height:34px; }
+  h1, h2 { font-family:'Newsreader',Georgia,serif; font-weight:400; margin:0; }
+  h1 { font-size:clamp(30px,6vw,44px); line-height:1.1; margin:28px 0 10px; }
+  h2 { font-size:26px; margin-bottom:10px; }
+  p { margin:0 0 12px; }
+  .muted { color:var(--muted); }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:24px; margin:18px 0; }
+  .warm { background:var(--warm); border-color:var(--warm); }
+  table { width:100%; border-collapse:collapse; font-size:16px; }
+  td, th { padding:9px 0; border-top:1px solid var(--line); text-align:left; }
+  th { font-weight:600; color:var(--muted); font-size:14px; border-top:0; }
+  td.n, th.n { text-align:right; width:90px; }
+  .knop { display:inline-flex; align-items:center; justify-content:center; min-height:52px; padding:0 24px; border-radius:26px; border:0; background:var(--green); color:#fff; font:inherit; font-weight:600; cursor:pointer; text-decoration:none; }
+  .knop.licht { background:transparent; color:var(--green); border:1px solid var(--green); }
+  .knop:disabled { opacity:.45; cursor:default; }
+  .rij { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  label.akkoord { display:flex; gap:12px; align-items:flex-start; margin:14px 0 18px; font-size:15px; }
+  label.akkoord input { width:22px; height:22px; margin:2px 0 0; flex-shrink:0; accent-color:var(--green); }
+  .fout { color:#8A3B2E; }
+  .hidden { display:none !important; }
+  ul { padding-left:22px; margin:6px 0 14px; color:var(--muted); }
+  a { color:var(--ink); }
+</style>
+</head>
+<body>
+<main>
+  <header><a href="/"><img src="assets/logo-horizontaal.png" alt="Uitvaart portret"></a></header>
+  <p id="laden" class="muted" style="margin-top:28px">Even laden…</p>
+
+  <section id="ongeldig" class="box hidden">
+    <h2>Deze link werkt niet</h2>
+    <p id="ongeldig-tekst">Gebruik de beheerlink uit uw e-mail. Lukt het niet? Bel of app <a href="tel:+31618424858">06 18 42 48 58</a>.</p>
+  </section>
+
+  <div id="pagina" class="hidden">
+    <h1 id="titel">Uw verzameling</h1>
+    <p class="muted" id="sub">Hier ziet u wat de familie heeft aangeleverd. Deze pagina is alleen voor u.</p>
+
+    <section class="box" id="delen-box">
+      <h2>Deel de verzamellink</h2>
+      <p class="muted">Iedereen met deze link kan foto’s, filmpjes en muziek toevoegen.</p>
+      <div class="rij"><button type="button" class="knop" id="delen">Deel de link</button> <button type="button" class="knop licht" id="kopieer">Kopieer de link</button> <a class="knop licht" id="zelf-upload" href="#">Zelf foto’s toevoegen</a></div>
+    </section>
+
+    <section class="box">
+      <h2>Wat is er binnen</h2>
+      <table><thead><tr><th>Periode</th><th class="n">Foto’s</th><th class="n">Filmpjes</th></tr></thead><tbody id="tabel"></tbody></table>
+      <p class="muted" id="muziek" style="margin-top:14px"></p>
+      <button type="button" class="knop licht" id="ververs" style="min-height:42px">Vernieuwen</button>
+    </section>
+
+    <section class="box" id="afronden">
+      <h2>Is iedereen klaar?</h2>
+      <p>Rond het verzamelen af en download alles in één keer, voor <strong id="prijs">€29</strong>:</p>
+      <ul>
+        <li>alle foto’s en filmpjes in hetzelfde formaat: breedbeeld 1920×1080 (JPEG en mp4), ook iPhone-foto’s en -video’s;</li>
+        <li>rechtgezet en op volgorde genummerd: portretfoto, de periodes van het leven, daarna hobby’s en twijfelgevallen;</li>
+        <li>liggende foto’s vullen het beeld, staande foto’s blijven heel met een rustige wazige achtergrond;</li>
+        <li>met de muziek erbij, klaar om in één keer in PowerPoint, Photostage of een ander programma te slepen.</li>
+      </ul>
+      <p class="muted">Na het afronden kan niemand meer foto’s toevoegen. Vraag de familie dus eerst of iedereen klaar is.</p>
+      <label class="akkoord"><input type="checkbox" id="akkoord"> <span>Ik ga akkoord met de <a href="algemene-voorwaarden.html" target="_blank">algemene voorwaarden</a> en wil dat de bestanden direct worden omgezet. Ik begrijp dat mijn herroepingsrecht vervalt zodra de download is geleverd.</span></label>
+      <button type="button" class="knop" id="betaal" disabled>Iedereen is klaar: afronden en betalen</button>
+      <p class="fout" id="fout" style="margin-top:12px"></p>
+    </section>
+
+    <section class="box hidden" id="bezig">
+      <h2>Bedankt, we zetten alles om</h2>
+      <p>U krijgt een mail met de downloadlink zodra alles klaar is. Meestal is dat binnen een half uur; bij veel filmpjes kan het wat langer duren.</p>
+    </section>
+
+    <section class="box hidden" id="geleverd">
+      <h2>De download staat klaar</h2>
+      <p id="geleverd-tekst">We hebben u de downloadlink gemaild. Niets ontvangen? Kijk ook bij ongewenste mail, of mail naar <a href="mailto:info@uitvaart-portret.nl">info@uitvaart-portret.nl</a>.</p>
+    </section>
+
+    <section class="box warm">
+      <h2>Toch liever dat Daan de film maakt?</h2>
+      <p>Wordt het u te veel, of wilt u net iets meer dan een diashow? Dan maak ik de film. Uw foto’s staan al klaar, en een betaalde download van €29 wordt verrekend. Een fotofilm kost €249, met filmpjes erbij €299.</p>
+      <div class="rij"><a class="knop" id="wa" href="https://wa.me/31618424858">App Daan</a> <a class="knop licht" href="tel:+31618424858">Bel 06 18 42 48 58</a> <a class="knop licht" id="ml" href="mailto:info@uitvaart-portret.nl">Mail</a></div>
+    </section>
+  </div>
+</main>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search), c = q.get('c'), b = q.get('b'), terug = q.get('terug');
+  const $ = (id) => document.getElementById(id);
+  let info = null, pogingen = 0;
+  const post = (body) => fetch('/api/link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then((r) => r.json().then((j) => { if (!r.ok) throw j; return j; }));
+  const esc = (s) => String(s).replace(/[&<>"']/g, (x) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[x]));
+
+  function toon(j) {
+    info = j;
+    $('laden').classList.add('hidden'); $('pagina').classList.remove('hidden');
+    $('titel').textContent = 'Uw verzameling' + (j.naam ? ', ' + j.naam : '');
+    if (j.datum) $('sub').textContent = 'Hier ziet u wat de familie heeft aangeleverd. Uitvaart: ' + j.datum + '. Deze pagina is alleen voor u.';
+    $('prijs').textContent = '€' + j.prijs;
+    $('zelf-upload').href = j.uploadlink;
+    let f = 0, v = 0;
+    $('tabel').innerHTML = j.perFase.map((p) => { f += p.fotos; v += p.videos;
+      return `<tr><td>${esc(p.naam)}</td><td class="n">${p.fotos}</td><td class="n">${p.videos}</td></tr>`; }).join('') +
+      `<tr><td><strong>Totaal</strong></td><td class="n"><strong>${f}</strong></td><td class="n"><strong>${v}</strong></td></tr>`;
+    $('muziek').textContent = j.muziek ? 'Muziek: ' + j.muziek + (j.muziekBestanden ? ` (${j.muziekBestanden} bestand${j.muziekBestanden === 1 ? '' : 'en'})` : '')
+      : j.muziekBestanden ? `Muziek: ${j.muziekBestanden} bestand${j.muziekBestanden === 1 ? '' : 'en'}` : 'Er is nog geen muziek doorgegeven.';
+    const d = j.download || '';
+    const klaar = /^Geleverd/.test(d), bezig = /^(Betaald|Omzetten)/.test(d);
+    $('afronden').classList.toggle('hidden', klaar || bezig);
+    $('delen-box').classList.toggle('hidden', klaar || bezig);
+    $('bezig').classList.toggle('hidden', !bezig);
+    $('geleverd').classList.toggle('hidden', !klaar);
+    $('betaal').disabled = !$('akkoord').checked || f + v === 0;
+    $('betaal').textContent = f + v === 0 ? 'Nog niets binnen' : `Iedereen is klaar: afronden en betalen (€${j.prijs})`;
+    const t = encodeURIComponent('Hallo Daan, wil jij de film maken? Mijn verzamellink: ' + c);
+    $('wa').href = 'https://wa.me/31618424858?text=' + t; $('ml').href = 'mailto:info@uitvaart-portret.nl?subject=Film%20laten%20maken&body=' + t;
+    // Net terug van de betaling: de bevestiging van Mollie kan een paar seconden duren.
+    if (terug && !klaar && !bezig && pogingen++ < 15) setTimeout(laad, 4000);
+  }
+  function laad() {
+    post({ actie: 'status', c, b }).then(toon).catch((e) => {
+      $('laden').classList.add('hidden'); $('ongeldig').classList.remove('hidden');
+      if (e && e.error) $('ongeldig-tekst').textContent = e.error + '. Lukt het niet? Bel of app 06 18 42 48 58.';
+    });
+  }
+  if (!c || !b) { $('laden').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); return; }
+  $('akkoord').onchange = () => info && toon(info);
+  $('ververs').onclick = laad;
+  $('kopieer').onclick = () => navigator.clipboard && info && navigator.clipboard.writeText(info.uploadlink).then(() => { $('kopieer').textContent = 'Gekopieerd'; });
+  $('delen').onclick = () => {
+    if (!info) return;
+    const tekst = "Wil je ook foto's toevoegen? Dat kan via deze link:";
+    if (navigator.share) navigator.share({ title: "Foto's verzamelen", text: tekst, url: info.uploadlink }).catch(() => {});
+    else window.open('https://wa.me/?text=' + encodeURIComponent(tekst + ' ' + info.uploadlink), '_blank');
+  };
+  $('betaal').onclick = () => {
+    if (!confirm('Is iedereen klaar? Na het afronden kan niemand meer foto’s toevoegen.')) return;
+    $('betaal').disabled = true; $('fout').textContent = '';
+    post({ actie: 'afsluiten', c, b, akkoord: true }).then((j) => {
+      if (j.checkout) location.href = j.checkout; else laad();
+    }).catch((e) => { $('fout').textContent = (e && e.error) || 'Dat lukte niet. Probeer het opnieuw.'; $('betaal').disabled = false; });
+  };
+  laad();
+})();
+</script>
+</body>
+</html>

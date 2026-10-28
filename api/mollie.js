@@ -1,5 +1,6 @@
 // Mollie-webhook: bij betaling wordt de film automatisch geleverd. Mollie stuurt alleen een id; we halen de status zelf op.
-import { googleToken, leesOpdrachten, lever, mollie } from './_lib.js';
+import { googleToken, leesOpdrachten, lever, mollie, logOpdracht, nu } from './_lib.js';
+import { startOmzetten } from './link.js';
 
 export default async function handler(req, res) {
   const id = String((req.body && req.body.id) || (req.query && req.query.id) || '');
@@ -14,6 +15,18 @@ export default async function handler(req, res) {
       const p = await mollie('payments/' + id);
       betaald = p.status === 'paid';
       omschrijving = p.description || '';
+      // Download van de verzamellink: na betaling de omzetserver starten.
+      if (p.metadata && p.metadata.soort === 'download') {
+        if (betaald) {
+          const t = await googleToken();
+          const o = (await leesOpdrachten(t)).find((x) => x.Code === p.metadata.code);
+          if (o && !/^(Omzetten|Geleverd)/.test(o.Download || '')) {
+            await logOpdracht(t, o.Code, { Download: 'Betaald ' + nu() + ' (' + id + ')' });
+            await startOmzetten(t, { ...o, Download: 'Betaald' });
+          }
+        }
+        return res.status(200).send('ok');
+      }
     }
     if (betaald) {
       const t = await googleToken();

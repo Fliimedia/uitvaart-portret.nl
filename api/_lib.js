@@ -72,7 +72,11 @@ function fail(res, status, message) {
 const SHEET_NAME = 'Opdrachtenoverzicht';
 const KOLOMMEN = ['Code', 'Naam', 'Contact', 'Datum uitvaart', 'Aanvraag', 'Uploadlink', 'Upload ontvangen',
   "Aantal foto's", "Extra foto's (boven 60)", 'Akkoord voorwaarden', 'Drive-map', 'Concept', 'Betaald', 'Geleverd', 'Notities',
-  'Pakket', 'Bedrag', 'Betaallink', 'Film', 'Review gevraagd', 'Muziek'];
+  'Pakket', 'Bedrag', 'Betaallink', 'Film', 'Review gevraagd', 'Muziek', 'Download'];
+
+// Verzamellink (zelf maken): prijs van de download en adres van de omzetserver (Google Cloud Run, geen geheim).
+const DOWNLOAD_PRIJS = 29;
+const OMZET_URL = process.env.OMZET_URL || '';
 
 function nu() {
   return new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', dateStyle: 'short', timeStyle: 'short' });
@@ -179,13 +183,14 @@ async function deel(token, fileId, download) {
 
 // ---- Prijs en Mollie ----
 const PRIJS = { Klassiek: 249, Modern: 299 };
-function berekenBedrag({ pakket, spoed = 0, extraFotos = 0, extraRondes = 0, korteVersie = false }) {
+function berekenBedrag({ pakket, spoed = 0, extraFotos = 0, extraRondes = 0, korteVersie = false, verrekend = 0 }) {
   const regels = [[`Fotofilm ${pakket}`, PRIJS[pakket] || 0]];
   const blokken = Math.ceil(Math.max(0, extraFotos) / 5);
   if (blokken) regels.push([`${blokken * 5} extra foto's`, blokken * 10]);
   if (+spoed === 49 || +spoed === 99) regels.push(['Spoedtoeslag', +spoed]);
   if (extraRondes > 0) regels.push([`${extraRondes} extra correctieronde(s)`, 35 * extraRondes]);
   if (korteVersie) regels.push(['Korte versie om te delen', 39]);
+  if (verrekend > 0) regels.push(['Verrekend: betaalde download verzamellink', -verrekend]);
   return { regels, totaal: regels.reduce((a, [, b]) => a + b, 0) };
 }
 async function mollie(path, opts = {}) {
@@ -227,5 +232,5 @@ uitvaart-portret.nl`;
     text: `${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`, html: mailHtml(`${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`) });
 }
 
-export { ROOT_NAME, rootMap, FASES, DIASHOW, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
+export { ROOT_NAME, rootMap, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
   mail, mailHtml, isMail, waNummer, filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, lever };
