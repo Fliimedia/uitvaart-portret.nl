@@ -313,7 +313,7 @@ export async function verwerk(o) {
       const veilig = label.replace(/[\/\\:*?"<>|]/g, ' ').trim();
       const zipMap = o.downloads ? path.join(tmp, 'zip-' + (film.nr || 1), veilig) : null;
       if (zipMap) await fs.mkdir(zipMap, { recursive: true });
-      const r = await verwerkFilm(d, tmp, film, fouten, zipMap, o.naam, !!o.diashow);
+      const r = await verwerkFilm(d, tmp, film, fouten, zipMap, o.naam, !!o.maakDiashow);
       aantal += r.aantal; muziekBestanden += r.muziek || 0; if (r.ds) diashows.push(r.ds);
       if (!zipMap) continue;
       try {

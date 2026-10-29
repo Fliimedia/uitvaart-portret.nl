@@ -275,7 +275,7 @@ export async function startOmzetten(t, o, { opnieuw = false } = {}) {
   await logOpdracht(t, c, { Download: 'Omzetten ' + nuIso() });
   const r = await fetch(OMZET_URL.replace(/\/$/, '') + '/omzetten', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(45000),
-    body: JSON.stringify({ job, code: c, naam: voornaam(o), ...m, downloads: await folder(t, DOWNLOADS, m.klant), diashow: !!o.Diashow, terug: SITE + '/api/link' }),
+    body: JSON.stringify({ job, code: c, naam: voornaam(o), ...m, downloads: await folder(t, DOWNLOADS, m.klant), maakDiashow: !!o.Diashow, terug: SITE + '/api/link' }),
   }).catch((e) => {
     // Opstarten van de server kan even duren; de opdracht is dan meestal wel aangekomen. Het vangnet van de dagtaak pakt het anders op.
     if (e.name === 'TimeoutError' || e.name === 'AbortError') return { ok: true, traag: true };
