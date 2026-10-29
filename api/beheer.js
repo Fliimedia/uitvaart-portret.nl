@@ -4,7 +4,7 @@ import {
   fail, googleToken, nu, logOpdracht, leesOpdrachten, mail, mailHtml, isMail, waNummer,
   filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, DOWNLOAD_PRIJS, EXTRA_FILM_VERZAMEL,
 } from './_lib.js';
-import { startOmzetten, beheerLink, maakPartnerlink, maakConsumentlink } from './link.js';
+import { startOmzetten, beheerLink, maakPartnerlink, maakConsumentlink, mappen } from './link.js';
 
 const ok = (pw) => typeof pw === 'string' && process.env.ADMIN_PASSWORD && pw.length === process.env.ADMIN_PASSWORD.length &&
   crypto.timingSafeEqual(Buffer.from(pw), Buffer.from(process.env.ADMIN_PASSWORD));
@@ -56,6 +56,26 @@ export default async function handler(req, res) {
       return res.json({ ok: true, melding: 'Omzetten gestart. Binnen een paar minuten gaat de downloadmail naar ' + (order.Contact || 'de aanvrager') + '.' });
     }
 
+    // Verzamellink: Daan zet een mp3 in de map 'Muziek' van een film (handwerk-diashow). Via de site geüpload,
+    // want de site ziet alleen bestanden die ze zelf maakte (scope drive.file); met de hand in Drive gezet werkt niet.
+    if (b.actie === 'muziekStart') {
+      if (!String(order.Code).startsWith('zelf-')) return fail(res, 400, 'Alleen voor verzamellinks');
+      if (!/^audio\//.test(String(b.mime))) return fail(res, 400, 'Alleen muziekbestanden (mp3)');
+      const m = await mappen(t, order.Code, order, { maak: true });
+      const film = m.films.find((f) => f.nr === (parseInt(b.film, 10) || 1)) || m.films[0];
+      const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + t, 'Content-Type': 'application/json; charset=UTF-8',
+          'X-Upload-Content-Type': b.mime, 'X-Upload-Content-Length': String(b.size),
+          Origin: req.headers.origin || 'https://' + req.headers.host,
+        },
+        body: JSON.stringify({ name: String(b.name).replace(/[\/\\]/g, '_').slice(0, 150), parents: [film.muziek] }),
+      });
+      const url = r.headers.get('location');
+      if (!r.ok || !url) throw new Error('Drive ' + r.status + ': ' + (await r.text()));
+      return res.json({ url });
+    }
     if (b.actie === 'filmStart') {
       if (!/^video\//.test(String(b.mime))) return fail(res, 400, 'Alleen videobestanden');
       const map = await filmMap(t, order.Code);

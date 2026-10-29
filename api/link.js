@@ -161,7 +161,7 @@ async function voegSamen(t, ids) {
   }
   return ids.slice(0, 1);
 }
-async function mappen(t, c, o, { maak = false } = {}) {
+export async function mappen(t, c, o, { maak = false } = {}) {
   const klant = await folder(t, c, await rootMap(t));
   const binnen = await submappen(t, klant);
   const pak = async (per, naam, ouder) => {
@@ -366,7 +366,7 @@ uitvaart-portret.nl`;
     ...(ds.length ? { Diashow: dsHand.length ? 'Handwerk ' + nu() + ' (' + dsHand.map((x) => 'film ' + x.nr + ': ' + x.status).join(', ') + ')' : 'Geleverd ' + nu() } : {}),
     'Drive-map': 'https://drive.google.com/drive/folders/' + m.klant });
   try {
-    const hand = dsHand.map((x) => `\nDIASHOW MET DE HAND, film ${x.nr}${fl(x.nr)}: ${x.status === 'geen muziek' ? 'geen muziekbestand' + (x.muziek && x.muziek.length ? '; opgegeven: ' + x.muziek.slice(0, 5).join(' / ') : '') + `. Zet een mp3 in de map 'Muziek'${m.films.length > 1 ? ' van deze film' : ''} in de klantmap en klik in beheer op Omzetten, of maak hem zelf.` : x.status}`).join('');
+    const hand = dsHand.map((x) => `\nDIASHOW MET DE HAND, film ${x.nr}${fl(x.nr)}: ${x.status === 'geen muziek' ? 'geen muziekbestand' + (x.muziek && x.muziek.length ? '; opgegeven: ' + x.muziek.slice(0, 5).join(' / ') : '') + '. Ga naar beheer → Uitvaartondernemers of Verzamellinks en klik bij deze familie op "Muziek (mp3) toevoegen en diashow maken". Met de hand in Drive zetten werkt niet: de site ziet alleen bestanden die via de site zijn geüpload.' : x.status}`).join('');
     const d = `Download geleverd: ${c}\n${n} bestanden omgezet${ds.length ? '\nDiashow: ' + dsOk.length + ' klaar' + (dsHand.length ? ', ' + dsHand.length + ' handwerk' : '') : ''}${hand}${mis.length ? '\nNiet omgezet:\n' + mis.join('\n') : ''}\n\nMap: https://drive.google.com/drive/folders/${m.klant}`;
     await mail({ to: DAAN(), subject: `${soort(o)} · ${dsHand.length ? 'Diashow met de hand nodig' : 'Download geleverd'}: ${voornaam(o) || c}`, text: d, html: mailHtml(d) });
   } catch (e) { console.error('Melding download', e); }
