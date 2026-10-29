@@ -114,6 +114,7 @@
         <label class="add licht">+ Muziekbestand toevoegen<input type="file" id="muziek-file" multiple accept="audio/*,.mp3,.m4a,.wav,.aac,.flac"></label>
       </div>
       <p id="muziek-bestanden"></p>
+      <p id="muziek-check" class="check hidden"></p>
     </section>
     <p class="intro" style="font-size:15px">Papieren foto's? Fotografeer ze met uw telefoon bij daglicht, recht van boven en zonder flits.</p>
     <label class="akkoord"><input type="checkbox" id="akkoord"> <span>Ik ga akkoord met de <a href="algemene-voorwaarden.html" target="_blank">algemene voorwaarden</a> en wil dat Daan direct begint. Ik begrijp dat mijn herroepingsrecht vervalt zodra de film is geleverd.</span></label>
@@ -307,6 +308,30 @@
     $('muziek-bestanden').innerHTML = muziekFiles.map((f, k) => `🎵 ${f.name.replace(/[<>&]/g, '')} <button type="button" data-k="${k}" aria-label="Verwijderen">×</button>`).join('<br>');
     $('muziek-bestanden').querySelectorAll('button').forEach(btn => btn.onclick = () => { muziekFiles.splice(+btn.dataset.k, 1); tekenNummers(); render(); });
   }
+  // Lengte van elk muziekbestand (in de browser gemeten) voor de diashow-check: elke foto minstens 5 seconden.
+  const DUUR = new WeakMap();
+  function meetDuur(file) {
+    try {
+      const a = new Audio(), u = URL.createObjectURL(file);
+      a.preload = 'metadata';
+      a.onloadedmetadata = () => { if (isFinite(a.duration)) DUUR.set(file, a.duration); URL.revokeObjectURL(u); render(); };
+      a.onerror = () => URL.revokeObjectURL(u);
+      a.src = u;
+    } catch (e) {}
+  }
+  const mmss = (s) => Math.floor(s / 60) + ':' + String(Math.round(s % 60)).padStart(2, '0');
+  function checkMuziek() {
+    const el = $('muziek-check'); if (!el) return;
+    const n = items.filter(i => i.film === films[huidig].nr && i.mime.startsWith('image/')).length;
+    const d = muziekFiles.reduce((a, f) => a + (DUUR.get(f) || 0), 0);
+    let t = '';
+    if (ZELF && d > 0 && n >= 2) {
+      const max = 1 + Math.floor(d / 5), per = d / (n - 1);
+      if (n > max) t = `Te veel foto’s voor deze muziek (${mmss(d)}): elke foto staat minstens 5 seconden, dus er passen er maximaal ${max}. Nu: ${n}. Haal er ${n - max} weg, of voeg nog een nummer toe.`;
+      else if (per > 12) t = `De muziek (${mmss(d)}) is lang voor ${n} foto’s: elke foto zou ${Math.round(per)} seconden staan. Mooier is minstens ${1 + Math.ceil(d / 12)} foto’s, of een korter nummer. Voegen anderen nog foto’s toe, dan is het misschien al goed.`;
+    }
+    el.textContent = t; el.classList.toggle('hidden', !t);
+  }
   let muziekAl = '';
   const muziekOkF = f => !!f.muziekAl || f.muziekFiles.length > 0 || f.nummers.some(m => m.titel.trim().length > 1);
   function muziekOk() { bewaar(); return films.every(f => !items.some(i => i.film === f.nr) || muziekOkF(f)); }
@@ -355,7 +380,7 @@
   }
   const esc = t => String(t).replace(/[<>&"]/g, ch => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[ch]));
   $('nummer-plus').onclick = () => { if (nummers.length < 5) { nummers.push({ titel: '', link: '' }); tekenNummers(); } };
-  $('muziek-file').onchange = (e) => { muziekFiles.push(...[...e.target.files].slice(0, 5)); e.target.value = ''; tekenNummers(); render(); };
+  $('muziek-file').onchange = (e) => { const nieuw = [...e.target.files].slice(0, 5); muziekFiles.push(...nieuw); nieuw.forEach(meetDuur); e.target.value = ''; tekenNummers(); render(); };
   tekenNummers();
 
   function render() {
@@ -390,6 +415,7 @@
     chips.classList.toggle('hidden', !items.length);
     chips.innerHTML = perVak.slice(0, 5).map((k, f) => `<button type="button" data-f="${f}" class="${k ? 'vol' : ''}">${k ? '✓ ' : ''}${KORT[f]}</button>`).join('');
     chips.querySelectorAll('button').forEach(btn => btn.onclick = () => $('vak' + btn.dataset.f).scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    checkMuziek();
     const twijfel = items.filter(i => i.film === films[huidig].nr && (i.dubbel || i.klein || i.wazig)).length;
     $('check').classList.toggle('hidden', !twijfel);
     $('check').textContent = twijfel ? `${twijfel} foto${twijfel > 1 ? "'s" : ''} met een oranje rand: lijkt dubbel, klein of onscherp. Heeft u een betere versie, vervang hem dan. Anders gaan ze gewoon mee.` : '';
@@ -505,7 +531,7 @@
         for (let poging = 0; poging < 3 && !ok; poging++) {
           try {
             const f = mapjes[job.film || 1][job.fase];
-            const { url } = await post('/api/start', { c, s, folder: f.id, fsig: f.sig, name: job.name, mime: job.mime, size: job.file.size });
+            const { url } = await post('/api/start', { c, s, folder: f.id, fsig: f.sig, name: job.name, mime: job.mime, size: job.file.size, duur: job.duur || 0 });
             await put(url, job, b => { loaded.set(job, b); show(); });
             ok = true;
           } catch (e) { loaded.set(job, 0); }
@@ -566,7 +592,7 @@
           jobs.push({ file: i.file, mime: i.mime, fase: f, film: fm.nr, name: (ZELF ? NR[f] + '-' + nr : nr) + tags + ' - ' + i.file.name });
         });
       }
-      fm.muziekFiles.forEach((file, k) => jobs.push({ file, mime: file.type || 'audio/mpeg', fase: 0, film: fm.nr, audio: true, name: 'MUZIEK ' + (k + 1) + ' - ' + file.name }));
+      fm.muziekFiles.forEach((file, k) => jobs.push({ file, mime: file.type || 'audio/mpeg', fase: 0, film: fm.nr, audio: true, duur: DUUR.get(file) || 0, name: 'MUZIEK ' + (k + 1) + ' - ' + file.name }));
     }
     upload(jobs);
   };

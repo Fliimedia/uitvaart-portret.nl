@@ -85,33 +85,34 @@ export async function video(invoer, uit) {
 }
 
 // ---------- Automatische diashow (optie bij de verzamellink) ----------
-// Zelfde vorm als Daans films: eerste foto 8 s zonder muziek, daarna verdelen de foto's samen de lengte van de muziek,
-// zachte overgangen, aan het eind vloeit de laatste foto naar zwart-wit en dan naar zwart. Alleen foto's (filmpjes niet).
-const KOP = 8, OVER = 1, MIN = 2.5, MAX = 12;
+// Vorm (Daan, 29-10): eerste foto 5 s zonder muziek, bij de tweede foto begint de muziek; de foto's daarna delen
+// precies de lengte van de muziek (minimaal 5 s per foto). Zachte overgangen tussen alle foto's, geen fade van of
+// naar zwart. De laatste foto vloeit naar zwart-wit en blijft zo staan. Alleen foto's (filmpjes niet).
+const KOP = 5, OVER = 1, MIN = 5, LANG = 12;
 async function duur(bestand) {
   const { stdout } = await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', bestand]);
   return parseFloat(stdout) || 0;
 }
+// Ook gebruikt door de site (zelfde regels): te veel foto's = minder dan 5 s per foto; te lang = meer dan 12 s per foto.
 export function diashowPlan(nFotos, muziekDuur) {
-  if (nFotos < 2) return null;
-  const rest = nFotos - 1;
-  const per = Math.min(MAX, Math.max(MIN, muziekDuur / rest));
-  const duren = [KOP, ...Array(rest).fill(per)];
-  return { duren, totaal: KOP + rest * per, perFoto: per, teKort: muziekDuur / rest < MIN, teLang: muziekDuur / rest > MAX };
+  if (nFotos < 2 || !(muziekDuur > 0)) return null;
+  const rest = nFotos - 1, exact = muziekDuur / rest;
+  const per = Math.max(MIN, exact);
+  return { duren: [KOP, ...Array(rest).fill(per)], totaal: KOP + rest * per, perFoto: per, muziekDuur,
+    teKort: exact < MIN, teLang: exact > LANG, maxFotos: 1 + Math.floor(muziekDuur / MIN) };
 }
 export async function diashow(fotos, muziek, uit, tmp) {
   const lengtes = []; for (const m of muziek) lengtes.push(await duur(m));
-  const muziekDuur = lengtes.reduce((a, b) => a + b, 0);
-  const p = diashowPlan(fotos.length, muziekDuur);
-  if (!p || !muziekDuur) throw new Error('Te weinig foto\'s of geen muziek');
+  const p = diashowPlan(fotos.length, lengtes.reduce((a, b) => a + b, 0));
+  if (!p) throw new Error('Te weinig foto\'s of geen muziek');
   const n = fotos.length, args = ['-y', '-v', 'error'];
   fotos.forEach((f, i) => args.push('-loop', '1', '-framerate', '25', '-t', String(p.duren[i] + (i < n - 1 ? OVER : 0)), '-i', f));
   muziek.forEach((m) => args.push('-i', m));
   const g = [];
   fotos.forEach((f, i) => {
     let v = `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
-    if (i === n - 1) { const d = p.duren[i], a = Math.max(0, d - 4.5); v += `,hue=s='max(0,1-(t-${a.toFixed(2)})/2)',fade=t=out:st=${Math.max(0, d - 1.5).toFixed(2)}:d=1.5`; }
-    if (i === 0) v += ',fade=t=in:st=0:d=1';
+    // Laatste foto: verzadiging van 1 naar 0 in 2 s (nooit boven 1, anders gaan de kleuren raar doen), dan zwart-wit blijven staan.
+    if (i === n - 1) { const d = p.duren[i], a = Math.max(OVER, d - 4.5); v += `,hue=s='clip(1-(t-${a.toFixed(2)})/2,0,1)'`; }
     g.push(v + `[v${i}]`);
   });
   let laatste = 'v0', offset = 0;
@@ -121,7 +122,7 @@ export async function diashow(fotos, muziek, uit, tmp) {
     laatste = 'x' + i;
   }
   const a = muziek.map((_, k) => `[${n + k}:a]`).join('');
-  g.push(`${a}concat=n=${muziek.length}:v=0:a=1,aresample=48000,adelay=${KOP * 1000}:all=1,apad,atrim=0:${p.totaal.toFixed(3)},afade=t=out:st=${Math.max(0, p.totaal - 3).toFixed(3)}:d=3[a]`);
+  g.push(`${a}concat=n=${muziek.length}:v=0:a=1,aresample=48000,adelay=${KOP * 1000}:all=1,apad,atrim=0:${p.totaal.toFixed(3)}[a]`);
   const script = path.join(tmp, 'diashow-' + crypto.randomBytes(4).toString('hex') + '.txt');
   await fs.writeFile(script, g.join(';\n'));
   try {
@@ -289,7 +290,7 @@ async function verwerkFilm(d, tmp, film, fouten, zipMap, opdrachtNaam, wilDiasho
       const uit = path.join(zipMap, naam);
       const p = await diashow(fotos, audio, uit, tmp);
       try { await d.zet(film.diashow, naam, 'video/mp4', uit); } catch (e) { console.error('Diashow naar Drive', e.message); }
-      ds = { nr: film.nr || 1, status: 'ok', duur: Math.round(p.totaal), perFoto: Math.round(p.perFoto * 10) / 10, teKort: p.teKort, teLang: p.teLang };
+      ds = { nr: film.nr || 1, status: 'ok', duur: Math.round(p.totaal), perFoto: Math.round(p.perFoto * 10) / 10, teKort: p.teKort, teLang: p.teLang, fotos: fotos.length, maxFotos: p.maxFotos };
     } catch (e) { console.error('Diashow mislukt', film.nr, e.message); ds = { nr: film.nr || 1, status: 'mislukt' }; }
   }
   return { aantal, ds, muziek: muziek.length };

@@ -4,7 +4,7 @@ import {
   fail, googleToken, nu, logOpdracht, leesOpdrachten, mail, mailHtml, isMail, waNummer,
   filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, DOWNLOAD_PRIJS, EXTRA_FILM_VERZAMEL,
 } from './_lib.js';
-import { startOmzetten, beheerLink, maakPartnerlink, maakConsumentlink, mappen } from './link.js';
+import { startOmzetten, beheerLink, maakPartnerlink, maakConsumentlink, mappen, fotosInFilm } from './link.js';
 
 const ok = (pw) => typeof pw === 'string' && process.env.ADMIN_PASSWORD && pw.length === process.env.ADMIN_PASSWORD.length &&
   crypto.timingSafeEqual(Buffer.from(pw), Buffer.from(process.env.ADMIN_PASSWORD));
@@ -63,6 +63,8 @@ export default async function handler(req, res) {
       if (!/^audio\//.test(String(b.mime))) return fail(res, 400, 'Alleen muziekbestanden (mp3)');
       const m = await mappen(t, order.Code, order, { maak: true });
       const film = m.films.find((f) => f.nr === (parseInt(b.film, 10) || 1)) || m.films[0];
+      // Eerst alleen tellen: beheer waarschuwt bij te veel/te weinig foto's voor de lengte van het nummer.
+      if (b.tel) return res.json({ fotos: await fotosInFilm(t, film) });
       const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id', {
         method: 'POST',
         headers: {

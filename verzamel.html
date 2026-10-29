@@ -144,7 +144,18 @@
     // Optie diashow: +€10 per film (partner: excl. btw, op de factuur). Zonder muziekbestand maakt Daan hem met de hand.
     const ds = $('ds-optie').checked, dsBedrag = ds ? (j.diashowPrijs || 0) : 0;
     $('ds-prijs').textContent = '+' + (j.diashowTekst || '€10') + (j.partner ? ' excl. btw, op de factuur' : '') + (meer ? ` (€10 per film)` : '');
-    $('ds-noot').textContent = j.muziekBestanden ? '' : 'Er is nog geen muziekbestand (mp3) toegevoegd. Dan maak ik hem met de hand, met de muziek die is opgegeven.';
+    // Diashow-check per film: elke foto minstens 5 seconden; de foto's na de eerste delen de lengte van de muziek.
+    const mmss = (x) => Math.floor(x / 60) + ':' + String(Math.round(x % 60)).padStart(2, '0');
+    const checks = (j.films || []).map((x) => {
+      const n = x.fotos, d = x.muziekDuur || 0, naam = meer ? x.naam + ': ' : '';
+      if (!x.muziekBestanden) return n ? naam + 'nog geen muziekbestand (mp3); dan maak ik de diashow met de hand, met de opgegeven muziek.' : '';
+      if (!d || n < 2) return '';
+      const max = 1 + Math.floor(d / 5), per = d / (n - 1);
+      if (n > max) return naam + `te veel foto’s voor de muziek (${mmss(d)}). Elke foto staat minstens 5 seconden, dus er passen er ${max}; nu ${n}. De diashow wordt dan langer dan de muziek en loopt aan het eind stil door. Laat de familie er ${n - max} weghalen of een nummer toevoegen.`;
+      if (per > 12) return naam + `de muziek (${mmss(d)}) is lang voor ${n} foto’s: elke foto staat ${Math.round(per)} seconden. Mooier is minstens ${1 + Math.ceil(d / 12)} foto’s.`;
+      return '';
+    }).filter(Boolean);
+    $('ds-noot').innerHTML = checks.length ? '<br><strong style="color:#7A4A12">Let op:</strong> ' + checks.map(esc).join('<br>') : '';
     const totaal = (j.prijs || 0) + (j.partner ? 0 : dsBedrag), totaalTekst = '€' + (Number.isInteger(totaal) ? totaal : totaal.toFixed(2).replace('.', ','));
     let f = 0, v = 0;
     // Meerdere films (bijv. familie, vrienden, werk): per film een kop met totaal, de periodes en de muziek.

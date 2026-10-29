@@ -186,6 +186,12 @@ export async function mappen(t, c, o, { maak = false } = {}) {
   return { klant, fases, diashow, films };
 }
 // Bestanden in een vak (alle dubbele mappen samen).
+// Aantal foto's van één film (voor de diashow-check in beheer).
+export async function fotosInFilm(t, film) {
+  let n = 0;
+  for (const f of film.fases) n += (await inVak(t, f, 'mimeType')).filter((x) => String(x.mimeType).startsWith('image/')).length;
+  return n;
+}
 async function inVak(t, vak, velden) {
   const uit = [];
   for (const id of vak.ids) uit.push(...(await drive(t, `files?pageSize=1000&orderBy=name&fields=files(${velden})&q=` + encodeURIComponent(`'${id}' in parents and trashed=false`))).files);
@@ -209,10 +215,12 @@ async function status(res, { c, b }) {
   const regels = String(o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '').split(' | ').filter(Boolean);
   const muziekVan = (nr) => regels.filter((x) => (nr === 1 ? !/^Film \d+: /.test(x) : x.startsWith(`Film ${nr}: `))).map((x) => x.replace(/^Film \d+: /, ''));
   for (const film of m.films) {
-    const tel = { naam: filmLabel(film), fotos: 0, videos: 0, muziekBestanden: 0, perFase: [] };
+    const tel = { naam: filmLabel(film), fotos: 0, videos: 0, muziekBestanden: 0, muziekDuur: 0, perFase: [] };
     for (const [k, f] of film.fases.entries()) {
-      const files = await inVak(t, f, 'name,mimeType');
+      const files = await inVak(t, f, 'name,mimeType,appProperties');
       const au = files.filter((x) => x.mimeType.startsWith('audio/')).length;
+      // Lengte van de muziek (door de uploadpagina gemeten); 0 = onbekend.
+      for (const x of files) if (x.mimeType.startsWith('audio/')) tel.muziekDuur += +((x.appProperties || {}).duur) || 0;
       const fo = files.filter((x) => x.mimeType.startsWith('image/')).length, vi = files.filter((x) => x.mimeType.startsWith('video/')).length;
       muziekBestanden += au; tel.muziekBestanden += au;
       perFase[k].fotos += fo; perFase[k].videos += vi; tel.fotos += fo; tel.videos += vi;

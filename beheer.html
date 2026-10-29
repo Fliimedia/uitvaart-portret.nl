@@ -240,8 +240,20 @@
     if (mp3) mp3.onchange = async () => {
       const f = mp3.files[0]; if (!f) return;
       const film = k.querySelector('.mp3-film') ? k.querySelector('.mp3-film').value : 1;
-      uit.textContent = 'Muziek uploaden…';
+      uit.textContent = 'Muziek controleren…';
       try {
+        // Check: eerste foto 5 s, de rest deelt de muziek, minstens 5 s per foto; meer dan 12 s per foto is te lang.
+        const d = await new Promise((ok) => { const a = new Audio(), u = URL.createObjectURL(f); a.preload = 'metadata';
+          a.onloadedmetadata = () => { ok(isFinite(a.duration) ? a.duration : 0); URL.revokeObjectURL(u); }; a.onerror = () => ok(0); a.src = u; });
+        const { fotos: n } = await api({ actie: 'muziekStart', code: o.Code, film, tel: true, mime: f.type || 'audio/mpeg' });
+        const mmss = (x) => Math.floor(x / 60) + ':' + String(Math.round(x % 60)).padStart(2, '0');
+        if (d && n >= 2) {
+          const max = 1 + Math.floor(d / 5), per = d / (n - 1);
+          const w = n > max ? `Te veel foto's voor dit nummer (${mmss(d)}): er passen er ${max} (5 s per foto), er zijn er ${n}. De diashow loopt dan na de muziek stil door.`
+            : per > 12 ? `Het nummer (${mmss(d)}) is lang voor ${n} foto's: elke foto staat ${Math.round(per)} s. Mooier is minstens ${1 + Math.ceil(d / 12)} foto's, of een korter nummer.` : '';
+          if (w && !confirm(w + '\n\nToch met dit nummer doorgaan?')) { uit.textContent = 'Niet geüpload. Kies een ander nummer.'; mp3.value = ''; return; }
+        } else if (n < 2) { uit.textContent = 'Deze film heeft minder dan 2 foto\'s; een diashow kan niet.'; mp3.value = ''; return; }
+        uit.textContent = 'Muziek uploaden…';
         const { url } = await api({ actie: 'muziekStart', code: o.Code, film, name: f.name, mime: f.type || 'audio/mpeg', size: f.size });
         const r = await fetch(url, { method: 'PUT', body: f }); if (!r.ok) throw new Error('Upload ' + r.status);
         if (confirm('Muziek staat erin. Nu opnieuw omzetten, met diashow, en de downloadlink mailen?')) toonUit(uit, await api({ actie: 'omzet', code: o.Code }));
