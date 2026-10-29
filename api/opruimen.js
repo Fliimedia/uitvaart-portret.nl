@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   for (const k of klanten) {
     const fases = await lijst(`'${k.id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
     // ook extra films ('Film 2 – …') en de zips voor de downloadpagina ('Downloads')
-    const oud = fases.filter((f) => (FASES.includes(f.name) || f.name === DIASHOW || f.name === 'Downloads' || /^Film \d+ – /.test(f.name)) && f.createdTime < grens);
+    const oud = fases.filter((f) => (FASES.includes(f.name) || f.name === DIASHOW || f.name === 'Downloads' || f.name === 'Muziek' || /^Film \d+ – /.test(f.name)) && f.createdTime < grens);
     for (const f of oud) {
       await drive(t, `files/${f.id}`, { method: 'PATCH', body: JSON.stringify({ trashed: true }) });
     }

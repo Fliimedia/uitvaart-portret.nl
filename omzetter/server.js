@@ -224,6 +224,9 @@ async function verwerkFilm(d, tmp, film, fouten, zipMap, opdrachtNaam, wilDiasho
     }
     perFase.push(lijst);
   }
+  // Map 'Muziek' van deze film (Daan zet hier een mp3 als de familie alleen een titel gaf).
+  if (film.muziek) for (const f of (await d.lijst(film.muziek)).sort((a, b) => a.name.localeCompare(b.name, 'nl', { numeric: true })))
+    if (f.mimeType.startsWith('audio/')) muziek.push(f);
   const alles = perFase.flat();
   const pre = 'f' + (film.nr || 1) + '-';
   await pool(alles, 3, async (x, k) => {
@@ -289,7 +292,7 @@ async function verwerkFilm(d, tmp, film, fouten, zipMap, opdrachtNaam, wilDiasho
       ds = { nr: film.nr || 1, status: 'ok', duur: Math.round(p.totaal), perFoto: Math.round(p.perFoto * 10) / 10, teKort: p.teKort, teLang: p.teLang };
     } catch (e) { console.error('Diashow mislukt', film.nr, e.message); ds = { nr: film.nr || 1, status: 'mislukt' }; }
   }
-  return { aantal, ds };
+  return { aantal, ds, muziek: muziek.length };
 }
 
 // Meerdere films (familie, vrienden, werk): o.films = [{ nr, naam, map, fases, diashow }]. Oude opdrachten: één film.
@@ -300,6 +303,7 @@ export async function verwerk(o) {
   let aantal = 0;
   const films = Array.isArray(o.films) && o.films.length ? o.films : [{ nr: 1, map: o.klant, fases: o.fases, diashow: o.diashow }];
   const zips = [], diashows = [];
+  let muziekBestanden = 0;
   try {
     if (films.length > 1) for (const f of await d.lijst(o.diashow)) if (f.mimeType !== 'application/vnd.google-apps.folder') await d.weg(f.id); // resten van een eerdere enkele film
     if (o.downloads) for (const f of await d.lijst(o.downloads)) await d.weg(f.id); // oude zips weg
@@ -310,7 +314,7 @@ export async function verwerk(o) {
       const zipMap = o.downloads ? path.join(tmp, 'zip-' + (film.nr || 1), veilig) : null;
       if (zipMap) await fs.mkdir(zipMap, { recursive: true });
       const r = await verwerkFilm(d, tmp, film, fouten, zipMap, o.naam, !!o.diashow);
-      aantal += r.aantal; if (r.ds) diashows.push(r.ds);
+      aantal += r.aantal; muziekBestanden += r.muziek || 0; if (r.ds) diashows.push(r.ds);
       if (!zipMap) continue;
       try {
         const zipNaam = ((o.naam ? o.naam + ' – ' : '') + veilig).replace(/[\/\\:*?"<>|]/g, ' ').trim() + '.zip';
@@ -333,7 +337,7 @@ export async function verwerk(o) {
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
-  const r = await fetch(o.terug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actie: 'omgezet', job: o.job, aantal, fouten, zips, diashows }) });
+  const r = await fetch(o.terug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actie: 'omgezet', job: o.job, aantal, fouten, zips, diashows, muziekBestanden }) });
   console.log('Klaar', o.code, films.length, 'film(s),', aantal, 'omgezet,', fouten.length, 'fouten,', diashows.length, 'diashow(s), terugmelding', r.status);
 }
 

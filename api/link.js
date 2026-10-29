@@ -143,6 +143,7 @@ async function zoek(t, c) { return (await leesOpdrachten(t)).find((o) => o.Code 
 // en aanmaken in twee verzoeken tegelijk gaf dubbele mappen. maak = true (omzetten): ontbrekende mappen aanmaken en
 // eventuele dubbele vakmappen samenvoegen in de oudste. Elk vak: { naam, id (oudste), ids (alle) }.
 const MAP = 'application/vnd.google-apps.folder';
+const MUZIEKMAP = 'Muziek';
 async function submappen(t, ouder) {
   const q = `'${ouder}' in parents and mimeType='${MAP}' and trashed=false`;
   const lijst = (await drive(t, 'files?pageSize=200&orderBy=createdTime&fields=files(id,name)&q=' + encodeURIComponent(q))).files;
@@ -176,7 +177,10 @@ async function mappen(t, c, o, { maak = false } = {}) {
   const films = [{ nr: 1, naam: /^Film \d+$/.test(n1) ? '' : n1, map: klant, fases }];
   const extra = Object.entries(binnen).map(([naam, ids]) => { const m = FILMSUB.exec(naam); return m && +m[1] >= 2 ? { nr: +m[1], naam: m[2], id: ids[0] } : null; })
     .filter(Boolean).sort((a, b) => a.nr - b.nr);
-  for (const f of extra) films.push({ nr: f.nr, naam: f.naam, map: f.id, fases: await vakken(f.id, await submappen(t, f.id)) });
+  for (const f of extra) { const per = await submappen(t, f.id); films.push({ nr: f.nr, naam: f.naam, map: f.id, fases: await vakken(f.id, per), per }); }
+  // Per film een map 'Muziek' (bij omzetten aangemaakt): daar zet Daan een mp3 als de familie alleen een titel gaf.
+  films[0].per = binnen;
+  for (const f of films) { f.muziek = (await pak(f.per, MUZIEKMAP, f.map))[0] || null; delete f.per; }
   if (maak && films.length > 1) for (const f of films) f.diashow = await folder(t, `Film ${f.nr}` + (f.naam ? ' – ' + f.naam : ''), diashow);
   else films[0].diashow = diashow;
   return { klant, fases, diashow, films };
@@ -294,7 +298,7 @@ async function omzetToken(res, { job }) {
 }
 
 // De omzetserver is klaar: map delen en de downloadlink mailen.
-async function omgezet(res, { job, aantal, fouten, zips, diashows }) {
+async function omgezet(res, { job, aantal, fouten, zips, diashows, muziekBestanden }) {
   const c = checkJob(job);
   if (!c) return fail(res, 403, 'Ongeldige opdracht');
   const t = await googleToken();
@@ -348,7 +352,7 @@ ${link}
 
 ${zipsOk ? (m.films.length > 1 ? 'Per film is er één knop om te downloaden.' : 'Met één knop downloadt u alles in één keer.') + ' Het werkt het makkelijkst op een computer.' : "Klik rechtsboven op 'Alles downloaden'; Google maakt er een zip van."}
 
-${m.films.length > 1 ? `Voor elke film is er een eigen map (${m.films.map(filmLabel).join(', ')}). Samen ${n} foto’s en filmpjes` : `Er staan ${n} foto’s en filmpjes klaar`} in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd: eerst de portretfoto, dan de periodes van het leven, daarna de hobbyfoto’s en de foto’s waarvan de familie twijfelde. Sleep ze in één keer in uw programma, zoals PowerPoint of Photostage. De muziek zit erbij${m.films.length > 1 ? ', per film' : ''}.${dsTekst}${mis.length ? `\n\nDeze bestanden konden we niet omzetten (de originelen staan er wel):\n${mis.join('\n')}` : ''}
+${m.films.length > 1 ? `Voor elke film is er een eigen map (${m.films.map(filmLabel).join(', ')}). Samen ${n} foto’s en filmpjes` : `Er staan ${n} foto’s en filmpjes klaar`} in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd: eerst de portretfoto, dan de periodes van het leven, daarna de hobbyfoto’s en de foto’s waarvan de familie twijfelde. Sleep ze in één keer in uw programma, zoals PowerPoint of Photostage. ${(+muziekBestanden || 0) > 0 ? `De muziek zit erbij${m.films.length > 1 ? ', per film' : ''}.` : 'De opgegeven muziek (titel en artiest) staat in het bestand ‘Muziek – lees dit.txt’.'}${dsTekst}${mis.length ? `\n\nDeze bestanden konden we niet omzetten (de originelen staan er wel):\n${mis.join('\n')}` : ''}
 
 Download alles op tijd: na 30 dagen worden de bestanden automatisch verwijderd.
 
@@ -362,7 +366,7 @@ uitvaart-portret.nl`;
     ...(ds.length ? { Diashow: dsHand.length ? 'Handwerk ' + nu() + ' (' + dsHand.map((x) => 'film ' + x.nr + ': ' + x.status).join(', ') + ')' : 'Geleverd ' + nu() } : {}),
     'Drive-map': 'https://drive.google.com/drive/folders/' + m.klant });
   try {
-    const hand = dsHand.map((x) => `\nDIASHOW MET DE HAND, film ${x.nr}${fl(x.nr)}: ${x.status === 'geen muziek' ? 'geen muziekbestand' + (x.muziek && x.muziek.length ? '; opgegeven: ' + x.muziek.slice(0, 5).join(' / ') : '') + '. Zet een mp3 in de muziekmap en klik in beheer op Omzetten, of maak hem zelf.' : x.status}`).join('');
+    const hand = dsHand.map((x) => `\nDIASHOW MET DE HAND, film ${x.nr}${fl(x.nr)}: ${x.status === 'geen muziek' ? 'geen muziekbestand' + (x.muziek && x.muziek.length ? '; opgegeven: ' + x.muziek.slice(0, 5).join(' / ') : '') + `. Zet een mp3 in de map 'Muziek'${m.films.length > 1 ? ' van deze film' : ''} in de klantmap en klik in beheer op Omzetten, of maak hem zelf.` : x.status}`).join('');
     const d = `Download geleverd: ${c}\n${n} bestanden omgezet${ds.length ? '\nDiashow: ' + dsOk.length + ' klaar' + (dsHand.length ? ', ' + dsHand.length + ' handwerk' : '') : ''}${hand}${mis.length ? '\nNiet omgezet:\n' + mis.join('\n') : ''}\n\nMap: https://drive.google.com/drive/folders/${m.klant}`;
     await mail({ to: DAAN(), subject: `${soort(o)} · ${dsHand.length ? 'Diashow met de hand nodig' : 'Download geleverd'}: ${voornaam(o) || c}`, text: d, html: mailHtml(d) });
   } catch (e) { console.error('Melding download', e); }
