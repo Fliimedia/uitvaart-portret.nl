@@ -65,7 +65,7 @@ Werken jullie met een systeem zoals een online ceremonie? Dan lever ik een mp4 d
 
 Lijkt het je wat? Dan maak ik de eerste film voor een van jullie families kosteloos, zodat je zonder risico kunt zien of het past. Daarna werk ik met een vast partnertarief van €179 excl. btw per film, op één factuur per maand. Wat je de familie rekent, bepaal je zelf. Meer uitleg: https://uitvaart-portret.nl/fotofilm-uitvaartverzorger.html
 
-Zal ik je een persoonlijke link sturen, zodat je hem bij de eerstvolgende familie meteen kunt gebruiken? Een kort "ja" is genoeg. Bellen of appen mag ook: 06 18 42 48 58.
+Zal ik je een persoonlijke link sturen, zodat je hem bij de eerstvolgende familie meteen kunt gebruiken? Bellen of appen mag ook: 06 18 42 48 58.
 
 Hartelijke groet,
 Daan Lubbers` },
