@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import {
   fail, googleToken, nu, logOpdracht, leesOpdrachten, mail, mailHtml, isMail, waNummer,
   filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, DOWNLOAD_PRIJS, EXTRA_FILM_VERZAMEL,
-  drive, rootMap, categorie, categorieMap, klantNaam, CATEGORIE,
+  ordenKlantmappen,
 } from './_lib.js';
 import { startOmzetten, beheerLink, maakPartnerlink, maakConsumentlink, mappen, fotosInFilm } from './link.js';
 
@@ -30,32 +30,7 @@ export default async function handler(req, res) {
     const t = await googleToken();
     // Drive ordenen: oude klantmappen (direct onder de hoofdmap, naam = code) naar hun categoriemap, met leesbare naam.
     // Eerst zonder uitvoeren (voorbeeld), dan in porties van 12 (tijdslimiet van 60 s).
-    if (b.actie === 'ordenen') {
-      const root = await rootMap(t);
-      const cats = Object.values(CATEGORIE);
-      const los = (await drive(t, 'files?pageSize=1000&orderBy=createdTime&fields=files(id,name,appProperties)&q=' + encodeURIComponent(
-        `'${root}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`))).files.filter((f) => !cats.includes(f.name));
-      const orders = await leesOpdrachten(t);
-      const plan = [], blijft = [];
-      for (const f of los) {
-        const code = (f.appProperties || {}).code || f.name;
-        const o = orders.find((x) => x.Code === code) || orders.find((x) => String(x['Drive-map'] || '').endsWith('/' + f.id));
-        if (!o) { blijft.push(f.name); continue; }
-        plan.push({ f, o, pad: categorie(o, o.Code), naam: klantNaam(o, o.Code) });
-      }
-      const klaar = [];
-      if (b.uitvoeren) {
-        const cache = {};
-        for (const p of plan.slice(0, 12)) {
-          const sleutel = p.pad.join('/');
-          const ouder = cache[sleutel] || (cache[sleutel] = await categorieMap(t, p.pad));
-          await drive(t, `files/${p.f.id}?addParents=${ouder}&removeParents=${root}&fields=id`, { method: 'PATCH', body: JSON.stringify({ name: p.naam, appProperties: { code: p.o.Code } }) });
-          await logOpdracht(t, p.o.Code, { 'Drive-map': 'https://drive.google.com/drive/folders/' + p.f.id });
-          klaar.push(p.f.name);
-        }
-      }
-      return res.json({ plan: plan.map((p) => ({ van: p.f.name, naar: p.pad.join(' / ') + ' / ' + p.naam })), blijft, verplaatst: klaar.length, rest: b.uitvoeren ? plan.length - klaar.length : plan.length });
-    }
+    if (b.actie === 'ordenen') return res.json(await ordenKlantmappen(t, { uitvoeren: !!b.uitvoeren, max: 12 }));
     if (b.actie === 'lijst') {
       const lijst = (await leesOpdrachten(t)).filter((o) => o.Code).reverse()
         .map((o) => (o.Pakket === 'Zelf maken' ? { ...o, Beheerlink: beheerLink(o.Code) } : o));

@@ -235,6 +235,35 @@ async function klantMap(t, code, { o } = {}) {
   if (eerste && eerste !== nieuw.id) { await drive(t, `files/${nieuw.id}`, { method: 'PATCH', body: JSON.stringify({ trashed: true }) }); return eerste; }
   return nieuw.id;
 }
+// Oude klantmappen (direct onder de hoofdmap) naar hun categoriemap verplaatsen, met leesbare naam en code als label.
+// Zonder uitvoeren alleen het plan; met uitvoeren hooguit max stuks per keer (tijdslimiet). Beheer-knop en nachtelijke taak.
+async function ordenKlantmappen(t, { uitvoeren = false, max = 12 } = {}) {
+  const root = await rootMap(t);
+  const cats = Object.values(CATEGORIE);
+  const los = (await drive(t, 'files?pageSize=1000&orderBy=createdTime&fields=files(id,name,appProperties)&q=' + encodeURIComponent(
+    `'${root}' in parents and mimeType='${MAP}' and trashed=false`))).files.filter((f) => !cats.includes(f.name));
+  const orders = await leesOpdrachten(t);
+  const plan = [], blijft = [];
+  for (const f of los) {
+    const code = (f.appProperties || {}).code || f.name;
+    const o = orders.find((x) => x.Code === code) || orders.find((x) => String(x['Drive-map'] || '').endsWith('/' + f.id));
+    if (!o) { blijft.push(f.name); continue; }
+    plan.push({ f, o, pad: categorie(o, o.Code), naam: klantNaam(o, o.Code) });
+  }
+  let verplaatst = 0;
+  if (uitvoeren) {
+    const cache = {};
+    for (const p of plan.slice(0, max)) {
+      const sleutel = p.pad.join('/');
+      const ouder = cache[sleutel] || (cache[sleutel] = await categorieMap(t, p.pad));
+      await drive(t, `files/${p.f.id}?addParents=${ouder}&removeParents=${root}&fields=id`, { method: 'PATCH', body: JSON.stringify({ name: p.naam, appProperties: { code: p.o.Code } }) });
+      await logOpdracht(t, p.o.Code, { 'Drive-map': 'https://drive.google.com/drive/folders/' + p.f.id });
+      verplaatst++;
+    }
+  }
+  return { plan: plan.map((p) => ({ van: p.f.name, naar: p.pad.join(' / ') + ' / ' + p.naam })), blijft, verplaatst, rest: plan.length - verplaatst };
+}
+
 // Alle klantmappen (ook oude, nog niet geordende), met hun code.
 async function alleKlantmappen(t) {
   const root = await rootMap(t);
@@ -320,5 +349,5 @@ uitvaart-portret.nl`;
     text: `${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`, html: mailHtml(`${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`) });
 }
 
-export { ROOT_NAME, rootMap, klantMap, alleKlantmappen, categorie, categorieMap, klantNaam, CATEGORIE, FASES, DIASHOW, DOWNLOAD_PRIJS, DIASHOW_PRIJS, DIASHOW_EXTRA, PARTNER, diashowPrijs, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB, filmMapNaam, filmMappen, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
+export { ROOT_NAME, rootMap, klantMap, ordenKlantmappen, alleKlantmappen, categorie, categorieMap, klantNaam, CATEGORIE, FASES, DIASHOW, DOWNLOAD_PRIJS, DIASHOW_PRIJS, DIASHOW_EXTRA, PARTNER, diashowPrijs, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB, filmMapNaam, filmMappen, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
   mail, mailHtml, isMail, soort, waNummer, filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, lever };

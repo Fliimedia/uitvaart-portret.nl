@@ -3,7 +3,7 @@
 // 2. Reviewverzoek 7 dagen na levering (als GOOGLE_REVIEW_URL is ingesteld en er een e-mailadres is).
 // 3. Aangeleverde foto's 30 dagen na upload, en de film 90 dagen na levering, naar de prullenbak van Drive.
 // De akkoordverklaring en het opdrachtenoverzicht blijven bewaard. Drive leegt de prullenbak zelf na 30 dagen.
-import { ROOT_NAME, rootMap, alleKlantmappen, FASES, DIASHOW, googleToken, drive, folder, fail, logVeilig, nu, nuIso, leesOpdrachten, lever, mollie, mail, mailHtml, isMail, filmMap, logOpdracht } from './_lib.js';
+import { ROOT_NAME, rootMap, alleKlantmappen, ordenKlantmappen, FASES, DIASHOW, googleToken, drive, folder, fail, logVeilig, nu, nuIso, leesOpdrachten, lever, mollie, mail, mailHtml, isMail, filmMap, logOpdracht } from './_lib.js';
 import { alleLeads, volgende } from './partners.js';
 import { startOmzetten, beheerLink } from './link.js';
 
@@ -17,6 +17,15 @@ export default async function handler(req, res) {
   const grens = new Date(Date.now() - DAGEN * 864e5).toISOString();
   const t = await googleToken();
   const lijst = async (q) => (await drive(t, 'files?pageSize=1000&fields=files(id,name,createdTime)&q=' + encodeURIComponent(q))).files;
+  // Oude klantmappen eerst naar hun categoriemap (beheer → Drive ordenen doet hetzelfde); mail aan Daan met wat er verplaatst is.
+  try {
+    const orde = await ordenKlantmappen(t, { uitvoeren: true, max: 25 });
+    if (orde.verplaatst) {
+      const tekst = `Ik heb ${orde.verplaatst} oude klantmap(pen) in Drive op hun plek gezet:\n\n` + orde.plan.slice(0, orde.verplaatst).map((p) => `- ${p.van} → ${p.naar}`).join('\n') +
+        (orde.rest ? `\n\nNog ${orde.rest} te gaan; die volgen de komende nacht.` : '') + (orde.blijft.length ? `\n\nBlijft staan (niet in het opdrachtenoverzicht): ${orde.blijft.join(', ')}` : '');
+      await mail({ to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl', subject: `🗂 Drive · ${orde.verplaatst} klantmap(pen) geordend`, text: tekst, html: mailHtml(tekst) });
+    }
+  } catch (e) { console.error('Drive ordenen', e); }
   const klanten = await alleKlantmappen(t); // ook in de categoriemappen (1 Films, 2 Verzamellinks, 3 Uitvaartondernemers/…, 4 Tests)
   const opgeruimd = [];
   for (const k of klanten) {
