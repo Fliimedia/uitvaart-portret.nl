@@ -42,7 +42,15 @@ const vult = (r) => r >= 1.45 && r <= 1.95; // liggend ~3:2 tot 16:9: bijsnijden
 export async function foto(invoer, uit, heic) {
   let bron = invoer;
   if (heic) { bron = invoer + '.jpg'; await run('heif-convert', ['-q', '95', invoer, bron]); }
-  const meta = await sharp(bron).metadata();
+  let meta;
+  try { meta = await sharp(bron).metadata(); }
+  catch (e) {
+    // Formaat dat sharp niet kent (bijv. JPEG XL .jxl): eerst met ffmpeg naar png.
+    const png = invoer + '.png';
+    await run('ffmpeg', ['-y', '-v', 'error', '-i', bron, '-frames:v', '1', png]);
+    if (bron !== invoer) await fs.rm(bron, { force: true });
+    bron = png; meta = await sharp(bron).metadata();
+  }
   const draai = (meta.orientation || 1) >= 5;
   const r = draai ? meta.height / meta.width : meta.width / meta.height;
   const basis = () => sharp(bron, { failOn: 'none' }).rotate();

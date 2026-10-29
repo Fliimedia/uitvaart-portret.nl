@@ -188,7 +188,7 @@
     document.querySelector('#kiezen .intro').textContent = 'Zet de foto\'s per periode klaar; zo staat de volgorde al goed.';
   }
 
-  const extMime = n => /\.(heic|heif)$/i.test(n) ? 'image/heic' : /\.(jpe?g)$/i.test(n) ? 'image/jpeg' : /\.mov$/i.test(n) ? 'video/quicktime' : '';
+  const extMime = n => /\.(heic|heif)$/i.test(n) ? 'image/heic' : /\.jxl$/i.test(n) ? 'image/jxl' : /\.(jpe?g)$/i.test(n) ? 'image/jpeg' : /\.mov$/i.test(n) ? 'video/quicktime' : '';
 
   const MOBIEL = matchMedia('(pointer: coarse)').matches;
   // Vakken opbouwen
