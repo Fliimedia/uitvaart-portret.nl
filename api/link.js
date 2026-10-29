@@ -3,7 +3,7 @@
 // - Verzamellink (zelf maken): aanvragen, status bekijken, afsluiten en betalen (€39), en de terugkoppeling van de omzetserver.
 import crypto from 'crypto';
 import { sign, check, fail, nu, nuIso, logVeilig, logOpdracht, isMail, mail, mailHtml, googleToken, drive, folder, rootMap,
-  leesOpdrachten, deel, mollie, soort, FASES, DIASHOW, DOWNLOAD_PRIJS, DIASHOW_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB } from './_lib.js';
+  leesOpdrachten, deel, mollie, soort, FASES, DIASHOW, DOWNLOAD_PRIJS, DIASHOW_PRIJS, diashowPrijs, PARTNER, DIASHOW_EXTRA, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB } from './_lib.js';
 
 const DAAN = () => process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl';
 const SITE = 'https://www.uitvaart-portret.nl';
@@ -198,7 +198,7 @@ async function inVak(t, vak, velden) {
   return uit.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'nl', { numeric: true }));
 }
 const filmLabel = (f) => f.naam || 'Film ' + f.nr;
-// Download bij de verzamellink: €39, plus €12,99 per extra film.
+// Download bij de verzamellink: €39, plus €7,99 per extra film (consument).
 const downloadPrijs = (n) => Math.round((DOWNLOAD_PRIJS + EXTRA_FILM_VERZAMEL * Math.max(0, n - 1)) * 100) / 100;
 const euro = (x) => '€' + (Number.isInteger(x) ? String(x) : x.toFixed(2).replace('.', ','));
 
@@ -232,7 +232,7 @@ async function status(res, { c, b }) {
   const prijs = downloadPrijs(films.length);
   res.json({ naam: voornaam(o), partner: o.Partner || '', datum: o['Datum uitvaart'] || '', uploadlink: o.Uploadlink || uploadLink(c), perFase, films,
     muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekBestanden, download: o.Download || '', prijs, prijsTekst: euro(prijs),
-    diashow: o.Diashow || '', diashowPrijs: DIASHOW_PRIJS * films.length, diashowTekst: euro(DIASHOW_PRIJS * films.length), kijklink: kijkLink(c), downloadlink: /^Geleverd/.test(o.Download || '') ? downloadLink(c) : '' });
+    diashow: o.Diashow || '', diashowPrijs: diashowPrijs(films.length, !!o.Partner), diashowTekst: euro(diashowPrijs(films.length, !!o.Partner)), extraFilmTekst: euro(o.Partner ? PARTNER.extraFilm : EXTRA_FILM_VERZAMEL), diashowExtraTekst: euro(o.Partner ? PARTNER.diashowExtra : DIASHOW_EXTRA), kijklink: kijkLink(c), downloadlink: /^Geleverd/.test(o.Download || '') ? downloadLink(c) : '' });
 }
 
 // ---- 3. Afsluiten en betalen ----
@@ -252,7 +252,7 @@ async function afsluiten(res, { c, b, akkoord, diashow }) {
   if (!process.env.MOLLIE_API_KEY) return fail(res, 500, 'Betalen is even niet mogelijk. Mail info@uitvaart-portret.nl');
   const terug = beheerLink(c) + '?terug=1';
   const nFilms = (await mappen(t, c, o)).films.length;
-  const bedrag = Math.round((downloadPrijs(nFilms) + (diashow ? DIASHOW_PRIJS * nFilms : 0)) * 100) / 100;
+  const bedrag = Math.round((downloadPrijs(nFilms) + (diashow ? diashowPrijs(nFilms) : 0)) * 100) / 100;
   const p = await mollie('payments', { method: 'POST', body: JSON.stringify({
     amount: { currency: 'EUR', value: bedrag.toFixed(2) },
     description: `Download foto's ${voornaam(o)}${nFilms > 1 ? ' (' + nFilms + ' films)' : ''}${diashow ? ' + diashow' : ''} [${c}]`.slice(0, 255),

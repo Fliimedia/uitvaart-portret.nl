@@ -78,8 +78,14 @@ const KOLOMMEN = ['Code', 'Naam', 'Contact', 'Datum uitvaart', 'Aanvraag', 'Uplo
 
 // Verzamellink (zelf maken): prijs van de download en adres van de omzetserver (Google Cloud Run, geen geheim).
 const DOWNLOAD_PRIJS = 39; // consument, incl. 21% btw (partner: €24,99 excl. btw, zie beheer.html)
-const DIASHOW_PRIJS = 10; // optie automatische diashow (mp4) per film: consument incl. btw, partner €10 excl. btw (zie beheer.html)
-const EXTRA_FILM_VERZAMEL = 12.99; // per extra film bij de verzamellink, consument incl. btw (partner: €9,99 excl. btw)
+// Prijzen sinds 29-10-2026 (Daan). Consument incl. 21% btw, altijd boven de partnerprijs incl. btw.
+// Partner (excl. btw, maandfactuur; zie ook beheer.html): link €24,99, extra film €4,99, diashow €19,99 + €9,99 per extra film.
+const DIASHOW_PRIJS = 29.99; // automatische diashow (mp4) voor de eerste film, consument
+const DIASHOW_EXTRA = 14.99; // diashow per extra film, consument
+const EXTRA_FILM_VERZAMEL = 7.99; // per extra film bij de verzamellink, consument
+const PARTNER = { link: 24.99, extraFilm: 4.99, diashow: 19.99, diashowExtra: 9.99 }; // excl. btw
+// Diashowprijs voor n films (consument of partner).
+const diashowPrijs = (n, partner) => n ? Math.round(((partner ? PARTNER.diashow : DIASHOW_PRIJS) + (partner ? PARTNER.diashowExtra : DIASHOW_EXTRA) * (n - 1)) * 100) / 100 : 0;
 
 // Meerdere films per opdracht: film 1 = de vakmappen in de klantmap; film 2+ = submap 'Film n – naam' met dezelfde vakken.
 const FILMSUB = /^Film (\d+) – (.+)$/;
@@ -255,5 +261,5 @@ uitvaart-portret.nl`;
     text: `${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`, html: mailHtml(`${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`) });
 }
 
-export { ROOT_NAME, rootMap, FASES, DIASHOW, DOWNLOAD_PRIJS, DIASHOW_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB, filmMapNaam, filmMappen, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
+export { ROOT_NAME, rootMap, FASES, DIASHOW, DOWNLOAD_PRIJS, DIASHOW_PRIJS, DIASHOW_EXTRA, PARTNER, diashowPrijs, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB, filmMapNaam, filmMappen, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
   mail, mailHtml, isMail, soort, waNummer, filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, lever };
