@@ -8,6 +8,7 @@ export const LEADS = 'Leads uitvaartondernemers';
 const DOC = 'Funnel – mails aan uitvaartondernemers';
 export const KOP = ['Bedrijf', 'Contactpersoon', 'Plaats', 'E-mail', 'Telefoon', 'Website', 'Bron', 'Status', 'Mail 1', 'Mail 2', 'Mail 3', 'Notities'];
 export const WACHT = { 2: 4, 3: 7 }; // dagen na de vorige mail
+export const VL_BLAD = 'Vlaanderen'; // tab met Vlaamse leads; die krijgen de VL-mails
 export const KLAAR = /gereageerd|geen interesse|afgemeld|partner|bellen|niet mailen/i;
 
 const ok = (pw) => typeof pw === 'string' && process.env.ADMIN_PASSWORD && pw.length === process.env.ADMIN_PASSWORD.length &&
@@ -26,14 +27,17 @@ async function zoek(t, naam, mime) {
 }
 
 // Leadlijst openen (of aanmaken in de Sales-map). Geeft id, bladnaam en rijen als objecten met rijnummer.
-export async function leads(t) {
+// Zonder naam: het eerste tabblad (Nederland). Met naam (bijv. VL_BLAD): dat tabblad, of null als het niet bestaat.
+export async function leads(t, naam) {
   let id = await zoek(t, LEADS, 'application/vnd.google-apps.spreadsheet');
   if (!id) {
     const map = await folder(t, SALES_MAP);
     id = (await drive(t, 'files?fields=id', { method: 'POST', body: JSON.stringify({
       name: LEADS, mimeType: 'application/vnd.google-apps.spreadsheet', parents: [map] }) })).id;
   }
-  const blad = (await sheets(t, `${id}?fields=sheets.properties.title`)).sheets[0].properties.title;
+  const titels = (await sheets(t, `${id}?fields=sheets.properties.title`)).sheets.map((x) => x.properties.title);
+  if (naam && !titels.includes(naam)) return null;
+  const blad = naam || titels[0];
   const v = (await sheets(t, `${id}/values/${encodeURIComponent(`'${blad}'!A:Z`)}`)).values || [];
   if (!v.length) {
     await sheets(t, `${id}/values/${encodeURIComponent(`'${blad}'!A1`)}?valueInputOption=RAW`, { method: 'PUT', body: JSON.stringify({ values: [KOP] }) });
@@ -42,6 +46,15 @@ export async function leads(t) {
   const kop = v[0];
   const rijen = v.slice(1).map((r, i) => ({ rij: i + 2, ...Object.fromEntries(kop.map((k, j) => [k, r[j] || ''])) }));
   return { id, blad, kop, rijen };
+}
+
+// Alle leadlijsten: Nederland en (als het tabblad bestaat) Vlaanderen. Elke rij krijgt land 'NL' of 'VL'.
+export async function alleLeads(t) {
+  const nl = await leads(t);
+  const vl = await leads(t, VL_BLAD);
+  nl.rijen.forEach((l) => { l.land = 'NL'; });
+  if (vl) vl.rijen.forEach((l) => { l.land = 'VL'; });
+  return vl ? [nl, vl] : [nl];
 }
 
 export async function zet(t, L, rij, velden) {
@@ -116,25 +129,31 @@ async function maakDoc(t) {
   if (!r.ok) console.error('Doc aanmaken', r.status, await r.text());
 }
 
-// Leest de teksten uit het Google Doc. Opbouw: per mail een regel "=== MAIL 1 ===", dan "Onderwerp: …", dan de tekst.
+// Leest de teksten uit het Google Doc. Opbouw: per mail een kopregel, dan "Onderwerp: …", dan de tekst.
+// Kopregels: "=== MAIL 1 ===" (Nederland), "=== MAIL 2 EERDER ===" (oudere NL-reeks), "=== VL MAIL 1 ===" (Vlaanderen).
 async function teksten(t) {
   const id = await zoek(t, DOC, 'application/vnd.google-apps.document');
   if (!id) { await maakDoc(t); return { bron: 'standaardteksten (Doc is nu aangemaakt in Drive)', mails: STANDAARD }; }
   const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}/export?mimeType=text/plain`, { headers: { Authorization: 'Bearer ' + t } });
   if (!r.ok) return { bron: 'standaardteksten (Doc niet leesbaar)', mails: STANDAARD };
-  const doc = (await r.text()).replace(/^﻿/, '').replace(/\r/g, '').replace(/[ \t ]+$/gm, '').replace(/\n{3,}/g, '\n\n');
+  const doc = (await r.text()).replace(/^\uFEFF/, '').replace(/\r/g, '').replace(/[ \t\u00A0]+$/gm, '').replace(/\n{3,}/g, '\n\n');
+  const koppen = [...doc.matchAll(/^=+\s*(VL\s+)?MAIL\s+(\d+)(\s+EERDER)?[^\n]*$/gmi)];
   const mails = {};
-  for (const deel of doc.split(/^=+\s*MAIL\s+/mi).slice(1)) {
-    const n = parseInt(deel, 10);
-    const eerder = /^\d+\s+EERDER/i.test(deel); // reeks voor leads die hun eerste mail vóór EERDER_VOOR kregen
-    const regels = deel.split('\n').slice(1);
+  koppen.forEach((k, i) => {
+    const n = +k[2];
+    const deel = doc.slice(k.index + k[0].length, i + 1 < koppen.length ? koppen[i + 1].index : doc.length);
+    const regels = deel.split('\n');
     const o = regels.findIndex((l) => /^\s*Onderwerp:/i.test(l));
-    if (!(n >= 1 && n <= 3) || o < 0) continue;
-    const tekst = regels.slice(o + 1).join('\n').replace(/^=+.*$/gm, '').trim();
-    if (tekst) mails[eerder ? n + 'e' : n] = { onderwerp: regels[o].replace(/^\s*Onderwerp:\s*/i, '').trim(), tekst };
-  }
+    if (!(n >= 1 && n <= 3) || o < 0) return;
+    const tekst = regels.slice(o + 1).join('\n').trim();
+    const sleutel = k[1] ? 'vl' + n : k[3] ? n + 'e' : String(n);
+    if (tekst) mails[sleutel] = { onderwerp: regels[o].replace(/^\s*Onderwerp:\s*/i, '').trim(), tekst };
+  });
   return [1, 2, 3].every((n) => mails[n]) ? { bron: 'Google Doc', mails } : { bron: 'standaardteksten (Doc onvolledig)', mails: STANDAARD };
 }
+
+// Welke tekst hoort bij deze lead en stap? Vlaanderen: VL MAIL n; oudere NL-reeks: MAIL n EERDER; anders MAIL n.
+export const sleutel = (l, n) => l.land === 'VL' ? 'vl' + n : eerder(l) && n > 1 ? n + 'e' : String(n);
 
 const dagen = (iso) => (Date.now() - Date.parse(String(iso).replace(' ', 'T') + ':00+01:00')) / 864e5;
 
@@ -151,8 +170,10 @@ export function volgende(l) {
 }
 
 function vul(s, l) {
-  const voornaam = String(l.Contactpersoon || '').trim().split(/\s+/)[0];
-  return s.replace(/\{aanhef\}/g, voornaam ? `Hoi ${voornaam},` : 'Hoi,')
+  const contact = String(l.Contactpersoon || '').trim();
+  const voornaam = contact.split(/\s+/)[0];
+  const aanhef = l.land === 'VL' ? (contact ? `Beste ${contact},` : 'Beste,') : (voornaam ? `Hoi ${voornaam},` : 'Hoi,');
+  return s.replace(/\{aanhef\}/g, aanhef)
     .replace(/\{voornaam\}/g, voornaam).replace(/\{bedrijf\}/g, l.Bedrijf || 'jullie').replace(/\{plaats\}/g, l.Plaats || '');
 }
 
@@ -179,17 +200,19 @@ export default async function handler(req, res) {
   if (!ok(b.wachtwoord)) return fail(res, 401, 'Onjuist wachtwoord');
   try {
     const t = await googleToken();
-    const L = await leads(t);
+    const lijsten = await alleLeads(t);
     if (b.actie === 'lijst') {
       const { bron, mails } = await teksten(t);
-      const lijst = L.rijen.filter((l) => l.Bedrijf || l['E-mail']).map((l) => {
+      const lijst = lijsten.flatMap((L) => L.rijen).filter((l) => l.Bedrijf || l['E-mail']).map((l) => {
         let n = volgende(l);
-        const m = n && mails[eerder(l) && n > 1 ? n + 'e' : n];
+        const m = n && mails[sleutel(l, n)];
         if (!m) n = 0; // geen tekst voor deze reeks: niets aanbieden
         return { ...l, stap: n, onderwerp: n ? vul(m.onderwerp, l) : '', tekst: n ? vul(m.tekst, l) : '' };
       });
-      return res.json({ lijst, bron, sheet: `https://docs.google.com/spreadsheets/d/${L.id}/edit` });
+      return res.json({ lijst, bron, sheet: `https://docs.google.com/spreadsheets/d/${lijsten[0].id}/edit` });
     }
+    const L = lijsten[b.land === 'VL' ? 1 : 0];
+    if (!L) return fail(res, 404, 'Tabblad Vlaanderen niet gevonden');
     const l = L.rijen.find((x) => x.rij === +b.rij);
     if (!l) return fail(res, 404, 'Lead niet gevonden');
     if (b.actie === 'status') {

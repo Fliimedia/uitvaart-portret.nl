@@ -1,7 +1,7 @@
 // Afmelden voor de partnermails. GET toont een knop (zodat virusscanners die links openen niemand afmelden),
 // POST meldt af (ook de één-klik-afmelding uit Gmail en Outlook).
 import { check, googleToken, nuIso } from './_lib.js';
-import { leads, zet } from './partners.js';
+import { alleLeads, zet } from './partners.js';
 
 const pagina = (tekst, knop = '') => `<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>Afmelden – Uitvaart portret</title></head>
@@ -19,9 +19,10 @@ export default async function handler(req, res) {
   }
   try {
     const t = await googleToken();
-    const L = await leads(t);
-    for (const l of L.rijen.filter((x) => x['E-mail'].trim().toLowerCase() === e)) {
-      await zet(t, L, l.rij, { Status: 'Afgemeld', Notities: `${l.Notities ? l.Notities + '; ' : ''}Afgemeld ${nuIso()}` });
+    for (const L of await alleLeads(t)) {
+      for (const l of L.rijen.filter((x) => x['E-mail'].trim().toLowerCase() === e)) {
+        await zet(t, L, l.rij, { Status: 'Afgemeld', Notities: `${l.Notities ? l.Notities + '; ' : ''}Afgemeld ${nuIso()}` });
+      }
     }
     return res.send(pagina('U bent afgemeld. U ontvangt geen berichten meer van mij. Excuses voor het storen.'));
   } catch (err) {
