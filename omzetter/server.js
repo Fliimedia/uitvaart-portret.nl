@@ -317,17 +317,23 @@ export async function verwerk(o) {
     if (films.length > 1) for (const f of await d.lijst(o.diashow)) if (f.mimeType !== 'application/vnd.google-apps.folder') await d.weg(f.id); // resten van een eerdere enkele film
     // Oude zips in Drive weg, maar links.json blijft: zo werkt de vorige download tot de nieuwe klaar is.
     if (o.downloads) for (const f of await d.lijst(o.downloads)) if (f.name !== 'links.json') await d.weg(f.id);
+    const gebruikt = new Set();
     for (const film of films) {
       // Per film één zip (zonder extra compressie: jpg en mp4 zijn al gecomprimeerd) voor de downloadpagina.
-      const label = films.length > 1 ? `Film ${film.nr || 1}` + (film.naam ? ' – ' + film.naam : '') : 'Klaar voor diashow';
-      const veilig = label.replace(/[\/\\:*?"<>|]/g, ' ').trim();
+      // Naam van de zip én van de map erin: uniek per familie en film (anders maakt macOS er "Klaar voor diashow 6" van).
+      // Eén film: alleen de naam van de familie; meer films: "<familie> – <filmnaam>".
+      const basis = o.naam || "Foto's";
+      const label = films.length > 1 ? basis + ' – ' + (film.naam || 'Film ' + (film.nr || 1)) : basis;
+      let veilig = label.replace(/[\/\\:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (gebruikt.has(veilig)) veilig += ' ' + (film.nr || gebruikt.size + 1); // twee films met dezelfde naam
+      gebruikt.add(veilig);
       const zipMap = o.downloads ? path.join(tmp, 'zip-' + (film.nr || 1), veilig) : null;
       if (zipMap) await fs.mkdir(zipMap, { recursive: true });
       const r = await verwerkFilm(d, tmp, film, fouten, zipMap, o.naam, !!o.maakDiashow);
       aantal += r.aantal; muziekBestanden += r.muziek || 0; if (r.ds) diashows.push(r.ds);
       if (!zipMap) continue;
       try {
-        const zipNaam = ((o.naam ? o.naam + ' – ' : '') + veilig).replace(/[\/\\:*?"<>|]/g, ' ').trim() + '.zip';
+        const zipNaam = veilig + '.zip';
         const zipPad = path.join(tmp, 'film-' + (film.nr || 1) + '.zip');
         await run('zip', ['-0', '-r', '-q', zipPad, veilig], { cwd: path.dirname(zipMap), maxBuffer: 1e7 });
         const { size } = await fs.stat(zipPad);
