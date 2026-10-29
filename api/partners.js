@@ -126,17 +126,21 @@ async function teksten(t) {
   const mails = {};
   for (const deel of doc.split(/^=+\s*MAIL\s+/mi).slice(1)) {
     const n = parseInt(deel, 10);
+    const eerder = /^\d+\s+EERDER/i.test(deel); // reeks voor leads die hun eerste mail vóór EERDER_VOOR kregen
     const regels = deel.split('\n').slice(1);
     const o = regels.findIndex((l) => /^\s*Onderwerp:/i.test(l));
     if (!(n >= 1 && n <= 3) || o < 0) continue;
     const tekst = regels.slice(o + 1).join('\n').replace(/^=+.*$/gm, '').trim();
-    if (tekst) mails[n] = { onderwerp: regels[o].replace(/^\s*Onderwerp:\s*/i, '').trim(), tekst };
+    if (tekst) mails[eerder ? n + 'e' : n] = { onderwerp: regels[o].replace(/^\s*Onderwerp:\s*/i, '').trim(), tekst };
   }
   return [1, 2, 3].every((n) => mails[n]) ? { bron: 'Google Doc', mails } : { bron: 'standaardteksten (Doc onvolledig)', mails: STANDAARD };
 }
 
 const dagen = (iso) => (Date.now() - Date.parse(String(iso).replace(' ', 'T') + ':00+01:00')) / 864e5;
 
+// Leads die hun eerste mail vóór 29-10-2026 kregen (andere eerste mail) volgen een eigen reeks: MAIL 2 EERDER, MAIL 3 EERDER.
+export const EERDER_VOOR = '2026-10-29';
+export const eerder = (l) => !!l['Mail 1'] && String(l['Mail 1']) < EERDER_VOOR;
 // Welke mail is nu aan de beurt voor deze lead? 0 = geen.
 export function volgende(l) {
   if (KLAAR.test(l.Status) || !isMail(l['E-mail'])) return 0;
@@ -179,8 +183,10 @@ export default async function handler(req, res) {
     if (b.actie === 'lijst') {
       const { bron, mails } = await teksten(t);
       const lijst = L.rijen.filter((l) => l.Bedrijf || l['E-mail']).map((l) => {
-        const n = volgende(l);
-        return { ...l, stap: n, onderwerp: n ? vul(mails[n].onderwerp, l) : '', tekst: n ? vul(mails[n].tekst, l) : '' };
+        let n = volgende(l);
+        const m = n && mails[eerder(l) && n > 1 ? n + 'e' : n];
+        if (!m) n = 0; // geen tekst voor deze reeks: niets aanbieden
+        return { ...l, stap: n, onderwerp: n ? vul(m.onderwerp, l) : '', tekst: n ? vul(m.tekst, l) : '' };
       });
       return res.json({ lijst, bron, sheet: `https://docs.google.com/spreadsheets/d/${L.id}/edit` });
     }
