@@ -159,18 +159,44 @@ function vul(s, l) {
 export const afmeldLink = (mail) => `https://uitvaart-portret.nl/api/afmelden?e=${encodeURIComponent(mail)}&s=${sign('afmeld:' + mail.toLowerCase())}`;
 const voet = (mail) => `\n\n--\nuitvaart-portret.nl · Goosebump Media · Land van Cocagneplein 28, 1093 NB Amsterdam\nGeen berichten meer van mij ontvangen? Antwoord met "stop" of klik: ${afmeldLink(mail)}`;
 
-// Beelden in een mail: een regel [beeld: bestand.jpg | bijschrift] wordt een plaatje uit assets/mail/ (alleen in de HTML-versie; de tekstversie laat de regel weg).
+// Beelden in een mail: een regel [beeld: bestand.jpg | bijschrift] wordt een plaatje uit assets/mail/.
+// Het plaatje gaat als inline-bijlage mee (cid:), want Outlook en iPhone-mail blokkeren externe plaatjes.
+// De tekstversie laat de regel weg en verwijst onderaan naar de pagina met de beelden.
 const BEELD = /^\[beeld:\s*([\w.-]+)\s*(?:\|\s*(.*?))?\s*\]$/;
-export const platte = (tekst) => tekst.split('\n').filter((r) => !BEELD.test(r.trim())).join('\n').replace(/\n{3,}/g, '\n\n');
+const BEELD_URL = 'https://uitvaart-portret.nl/assets/mail/';
+const BEELDEN_PAGINA = 'https://uitvaart-portret.nl/mailbeelden.html';
+const cid = (f) => 'beeld-' + f.replace(/[^\w-]/g, '-');
+const blokkenVan = (tekst) => tekst.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+export const beeldenVan = (tekst) => [...new Set(blokkenVan(tekst).map((b) => BEELD.exec(b)?.[1]).filter(Boolean))];
+export const platte = (tekst) => {
+  const t = tekst.split('\n').filter((r) => !BEELD.test(r.trim())).join('\n').replace(/\n{3,}/g, '\n\n');
+  return beeldenVan(tekst).length ? `${t.trimEnd()}\n\nAfbeeldingen bij deze mail: ${BEELDEN_PAGINA}` : t;
+};
 const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const link = (x) => esc(x).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" style="color:#4B5A48">${u}</a>`);
 export function htmlVan(tekst, mail) {
-  const blokken = tekst.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean).map((b) => {
+  const blokken = blokkenVan(tekst).map((b) => {
     const m = BEELD.exec(b);
-    if (m) return `<p style="margin:18px 0"><img src="https://uitvaart-portret.nl/assets/mail/${m[1]}" alt="${esc(m[2] || '')}" width="520" style="max-width:100%;height:auto;border:1px solid #E2D9CC;border-radius:10px;display:block">${m[2] ? `<span style="font-size:13px;color:#6A6F6B">${esc(m[2])}</span>` : ''}</p>`;
+    if (m) return `<p style="margin:18px 0"><img src="cid:${cid(m[1])}" alt="${esc(m[2] || 'Afbeelding')}" width="520" style="max-width:100%;height:auto;border:1px solid #E2D9CC;border-radius:10px;display:block">${m[2] ? `<span style="font-size:13px;color:#6A6F6B">${esc(m[2])}</span>` : ''}</p>`;
     return `<p style="margin:0 0 14px">${link(b).replace(/\n/g, '<br>')}</p>`;
   }).join('');
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;color:#222;max-width:560px">${blokken}<p style="margin:26px 0 0;font-size:12px;color:#6A6F6B">uitvaart-portret.nl · Goosebump Media · Land van Cocagneplein 28, 1093 NB Amsterdam<br>Geen berichten meer van mij ontvangen? Antwoord met "stop" of <a href="${afmeldLink(mail)}" style="color:#6A6F6B">meld je af</a>.</p></div>`;
+  const nietZichtbaar = beeldenVan(tekst).length ? `<p style="margin:20px 0 0;font-size:13px;color:#6A6F6B">Zie je de afbeeldingen niet? <a href="${BEELDEN_PAGINA}" style="color:#6A6F6B">Bekijk ze hier</a>.</p>` : '';
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;color:#222;max-width:560px">${blokken}${nietZichtbaar}<p style="margin:26px 0 0;font-size:12px;color:#6A6F6B">uitvaart-portret.nl · Goosebump Media · Land van Cocagneplein 28, 1093 NB Amsterdam<br>Geen berichten meer van mij ontvangen? Antwoord met "stop" of <a href="${afmeldLink(mail)}" style="color:#6A6F6B">meld je af</a>.</p></div>`;
+}
+
+// Rechtstreeks via de Resend-API: de inline-bijlage (content_id) zit niet in de Resend-SDK v4 die de site gebruikt.
+async function stuurMail({ naar, onderwerp, tekst, headers }) {
+  const beelden = beeldenVan(tekst);
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'Daan Lubbers <info@uitvaart-portret.nl>', to: [naar], reply_to: 'info@uitvaart-portret.nl',
+      subject: onderwerp, text: platte(tekst) + voet(naar), html: htmlVan(tekst, naar), headers,
+      attachments: beelden.length ? beelden.map((f) => ({ filename: f, path: BEELD_URL + f, content_id: cid(f) })) : undefined,
+    }),
+  });
+  if (!r.ok) throw new Error('Resend: ' + (await r.text()).slice(0, 300));
 }
 
 export default async function handler(req, res) {
@@ -198,12 +224,7 @@ export default async function handler(req, res) {
     }
     if (b.actie === 'test') {
       const naar = process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl';
-      const { Resend } = await import('resend');
-      const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
-        from: 'Daan Lubbers <info@uitvaart-portret.nl>', to: naar, replyTo: 'info@uitvaart-portret.nl',
-        subject: '[TEST] ' + String(b.onderwerp || '').slice(0, 200), text: platte(String(b.tekst || '').slice(0, 8000)) + voet(naar), html: htmlVan(String(b.tekst || '').slice(0, 8000), naar),
-      });
-      if (error) throw new Error('Resend: ' + JSON.stringify(error));
+      await stuurMail({ naar, onderwerp: '[TEST] ' + String(b.onderwerp || '').slice(0, 200), tekst: String(b.tekst || '').slice(0, 8000) });
       return res.json({ ok: true, naar });
     }
     if (b.actie === 'verstuur') {
@@ -213,13 +234,10 @@ export default async function handler(req, res) {
       const onderwerp = String(b.onderwerp || '').slice(0, 200);
       const tekst = String(b.tekst || '').slice(0, 8000);
       if (!onderwerp || !tekst) return fail(res, 400, 'Onderwerp en tekst zijn verplicht');
-      const { Resend } = await import('resend');
-      const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
-        from: 'Daan Lubbers <info@uitvaart-portret.nl>', to: naar, replyTo: 'info@uitvaart-portret.nl',
-        subject: onderwerp, text: platte(tekst) + voet(naar), html: htmlVan(tekst, naar),
+      await stuurMail({
+        naar, onderwerp, tekst,
         headers: { 'List-Unsubscribe': `<${afmeldLink(naar)}>, <mailto:info@uitvaart-portret.nl?subject=stop>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
       });
-      if (error) throw new Error('Resend: ' + JSON.stringify(error));
       await zet(t, L, l.rij, { ['Mail ' + n]: nuIso() });
       return res.json({ ok: true, verstuurd: nuIso() });
     }
