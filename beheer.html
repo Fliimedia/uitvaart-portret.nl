@@ -293,27 +293,27 @@
     const k = el(`<div class="kaart lead ${l.stap ? '' : 'klein'}">
       <div class="kop"><div><h2>${esc(l.Bedrijf)}</h2><div class="code">${esc(l.Contactpersoon || '')}${l.Contactpersoon ? ' · ' : ''}${esc(l.Plaats)} · ${esc(l['E-mail'] || 'geen e-mail')}${l.Website ? ` · <a href="${esc(l.Website)}" target="_blank">site</a>` : ''}</div></div>
         <select class="st">${STATUSSEN.map((s) => `<option ${s === l.Status ? 'selected' : ''} value="${s}">${s || 'Status…'}</option>`).join('')}</select></div>
-      <div class="chips"><span class="chip">${esc(stand)}</span>${l.stap ? `<span class="chip ja">Mail ${l.stap} staat klaar</span>` : ''}</div>
+      <div class="chips">${l.land === 'VL' ? '<span class="chip">Vlaanderen</span>' : ''}<span class="chip">${esc(stand)}</span>${l.stap ? `<span class="chip ja">Mail ${l.stap} staat klaar</span>` : ''}</div>
       ${l.stap ? `<input class="ond" style="width:100%" value="${esc(l.onderwerp)}"><div style="height:8px"></div><textarea class="tk">${esc(l.tekst)}</textarea>
       <div class="rij"><button type="button" class="licht tst">Testmail naar mezelf</button><button type="button" class="vs">Verstuur mail ${l.stap}</button><span class="code">Onder de mail komen automatisch je adres en een afmeldlink.</span></div>` : ''}
       <div class="uit"></div></div>`);
     const uit = k.querySelector('.uit');
     k.querySelector('.st').onchange = async (ev) => {
-      try { await papi({ actie: 'status', rij: l.rij, status: ev.target.value }); uit.className = 'uit'; uit.textContent = '✓ Status opgeslagen'; } catch (e) { toonFout(uit, e); }
+      try { await papi({ actie: 'status', land: l.land, rij: l.rij, status: ev.target.value }); uit.className = 'uit'; uit.textContent = '✓ Status opgeslagen'; } catch (e) { toonFout(uit, e); }
     };
     const vs = k.querySelector('.vs');
     if (vs) {
       k.verstuur = async () => {
         vs.disabled = true;
         try {
-          await papi({ actie: 'verstuur', rij: l.rij, stap: l.stap, onderwerp: k.querySelector('.ond').value, tekst: k.querySelector('.tk').value });
+          await papi({ actie: 'verstuur', land: l.land, rij: l.rij, stap: l.stap, onderwerp: k.querySelector('.ond').value, tekst: k.querySelector('.tk').value });
           uit.className = 'uit'; uit.textContent = '✓ Verstuurd naar ' + l['E-mail']; k.querySelector('.tk').disabled = true; k.querySelector('.ond').disabled = true;
           return true;
         } catch (e) { toonFout(uit, e); vs.disabled = false; return false; }
       };
       k.querySelector('.tst').onclick = async (ev) => {
         ev.target.disabled = true;
-        try { const r = await papi({ actie: 'test', rij: l.rij, onderwerp: k.querySelector('.ond').value, tekst: k.querySelector('.tk').value });
+        try { const r = await papi({ actie: 'test', land: l.land, rij: l.rij, onderwerp: k.querySelector('.ond').value, tekst: k.querySelector('.tk').value });
           uit.className = 'uit'; uit.textContent = '✓ Testmail verstuurd naar ' + r.naar + '. Er is niets naar ' + l.Bedrijf + ' gegaan.'; } catch (e) { toonFout(uit, e); }
         ev.target.disabled = false;
       };

@@ -4,7 +4,7 @@
 // 3. Aangeleverde foto's 30 dagen na upload, en de film 90 dagen na levering, naar de prullenbak van Drive.
 // De akkoordverklaring en het opdrachtenoverzicht blijven bewaard. Drive leegt de prullenbak zelf na 30 dagen.
 import { ROOT_NAME, rootMap, FASES, DIASHOW, googleToken, drive, folder, fail, logVeilig, nu, nuIso, leesOpdrachten, lever, mollie, mail, mailHtml, isMail, filmMap, logOpdracht } from './_lib.js';
-import { leads, volgende } from './partners.js';
+import { alleLeads, volgende } from './partners.js';
 import { startOmzetten, beheerLink } from './link.js';
 
 const DAGEN = 30;
@@ -115,9 +115,9 @@ uitvaart-portret.nl`;
   }
   // --- Partnerfunnel: herinnering als er follow-ups klaarstaan ---
   try {
-    const klaar = (await leads(t)).rijen.filter((l) => volgende(l) >= 2);
+    const klaar = (await alleLeads(t)).flatMap((L) => L.rijen).filter((l) => volgende(l) >= 2);
     if (klaar.length) {
-      const tekst = `Er staan ${klaar.length} follow-up(s) aan uitvaartondernemers klaar:\n${klaar.map((l) => '- ' + l.Bedrijf + ' (mail ' + volgende(l) + ')').join('\n')}\n\nVersturen: https://uitvaart-portret.nl/beheer.html (tab Partners)`;
+      const tekst = `Er staan ${klaar.length} follow-up(s) aan uitvaartondernemers klaar:\n${klaar.map((l) => '- ' + l.Bedrijf + (l.land === 'VL' ? ' [VL]' : '') + ' (mail ' + volgende(l) + ')').join('\n')}\n\nVersturen: https://uitvaart-portret.nl/beheer.html (tab Partners)`;
       await mail({ to: process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl', subject: `📣 Sales funnel · ${klaar.length} follow-up(s) klaar om te versturen`, text: tekst, html: mailHtml(tekst) });
       gedaan.followups = klaar.length;
     }
