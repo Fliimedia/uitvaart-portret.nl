@@ -3,7 +3,7 @@
 // 2. Reviewverzoek 7 dagen na levering (als GOOGLE_REVIEW_URL is ingesteld en er een e-mailadres is).
 // 3. Aangeleverde foto's 30 dagen na upload, en de film 90 dagen na levering, naar de prullenbak van Drive.
 // De akkoordverklaring en het opdrachtenoverzicht blijven bewaard. Drive leegt de prullenbak zelf na 30 dagen.
-import { ROOT_NAME, rootMap, FASES, DIASHOW, googleToken, drive, folder, fail, logVeilig, nu, nuIso, leesOpdrachten, lever, mollie, mail, mailHtml, isMail, filmMap, logOpdracht } from './_lib.js';
+import { ROOT_NAME, rootMap, alleKlantmappen, FASES, DIASHOW, googleToken, drive, folder, fail, logVeilig, nu, nuIso, leesOpdrachten, lever, mollie, mail, mailHtml, isMail, filmMap, logOpdracht } from './_lib.js';
 import { alleLeads, volgende } from './partners.js';
 import { startOmzetten, beheerLink } from './link.js';
 
@@ -16,9 +16,8 @@ export default async function handler(req, res) {
   }
   const grens = new Date(Date.now() - DAGEN * 864e5).toISOString();
   const t = await googleToken();
-  const root = await rootMap(t);
   const lijst = async (q) => (await drive(t, 'files?pageSize=1000&fields=files(id,name,createdTime)&q=' + encodeURIComponent(q))).files;
-  const klanten = await lijst(`'${root}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const klanten = await alleKlantmappen(t); // ook in de categoriemappen (1 Films, 2 Verzamellinks, 3 Uitvaartondernemers/…, 4 Tests)
   const opgeruimd = [];
   for (const k of klanten) {
     const fases = await lijst(`'${k.id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
@@ -28,8 +27,8 @@ export default async function handler(req, res) {
       await drive(t, `files/${f.id}`, { method: 'PATCH', body: JSON.stringify({ trashed: true }) });
     }
     if (oud.length) {
-      opgeruimd.push(k.name);
-      await logVeilig(k.name, { Notities: `Foto's opgeruimd ${nu()}` });
+      opgeruimd.push(k.code);
+      await logVeilig(k.code, { Notities: `Foto's opgeruimd ${nu()}` });
     }
   }
   // --- Betalingen, reviews en films ---

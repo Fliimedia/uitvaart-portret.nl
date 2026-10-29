@@ -2,7 +2,7 @@
 // - Daan maakt een persoonlijke uploadlink (beveiligd met ADMIN_PASSWORD).
 // - Verzamellink (zelf maken): aanvragen, status bekijken, afsluiten en betalen (€39), en de terugkoppeling van de omzetserver.
 import crypto from 'crypto';
-import { sign, check, fail, nu, nuIso, logVeilig, logOpdracht, isMail, mail, mailHtml, googleToken, drive, folder, rootMap,
+import { sign, check, fail, nu, nuIso, logVeilig, logOpdracht, isMail, mail, mailHtml, googleToken, drive, folder, rootMap, klantMap,
   leesOpdrachten, deel, mollie, soort, FASES, DIASHOW, DOWNLOAD_PRIJS, DIASHOW_PRIJS, diashowPrijs, PARTNER, DIASHOW_EXTRA, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB } from './_lib.js';
 
 const DAAN = () => process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl';
@@ -162,7 +162,7 @@ async function voegSamen(t, ids) {
   return ids.slice(0, 1);
 }
 export async function mappen(t, c, o, { maak = false } = {}) {
-  const klant = await folder(t, c, await rootMap(t));
+  const klant = await klantMap(t, c, o ? { o } : {});
   const binnen = await submappen(t, klant);
   const pak = async (per, naam, ouder) => {
     let ids = per[naam] || [];
@@ -458,7 +458,7 @@ async function downloadInfo(res, { c, d }) {
   const verlopen = () => res.json({ verlopen: true, naam: o ? voornaam(o) : '', partner: (o && o.Partner) || '' });
   const nieuw = !!o && /^(Betaald|Omzetten)/.test(o.Download || '');
   if (!o || (!nieuw && !/^Geleverd/.test(o.Download || ''))) return verlopen();
-  const klant = await folder(t, c, await rootMap(t));
+  const klant = await klantMap(t, c, { o });
   const binnen = await submappen(t, klant);
   const map = (binnen[DOWNLOADS] || [])[0];
   const diashow = (binnen[DIASHOW] || [])[0];

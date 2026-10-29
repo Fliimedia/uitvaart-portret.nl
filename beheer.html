@@ -55,6 +55,10 @@
   <div id="verzamel" hidden></div>
   <div id="ondernemers" hidden></div>
   <div id="partners" hidden></div>
+  <details class="kaart" id="ordenen" hidden><summary><strong>Drive ordenen</strong> <span class="code">oude klantmappen naar 1 Films, 2 Verzamellinks consument, 3 Uitvaartondernemers en 4 Tests</span></summary>
+    <p class="code">Eerst een voorbeeld; er verandert pas iets na "Uitvoeren". De links in het opdrachtenoverzicht blijven werken.</p>
+    <div class="rij"><button type="button" class="licht" id="ord-kijk">Bekijk wat er verplaatst wordt</button><button type="button" id="ord-doe" disabled>Uitvoeren</button></div>
+    <div class="uit" id="ord-uit"></div></details>
 </main>
 <script>
 (() => {
@@ -272,11 +276,31 @@
     return k;
   }
 
+  // Drive ordenen (eenmalig voor oude mappen; nieuwe klantmappen komen vanzelf goed te staan).
+  $('ord-kijk').onclick = async () => {
+    const uit = $('ord-uit'); uit.className = 'uit'; uit.textContent = 'Bezig…';
+    try {
+      const r = await api({ actie: 'ordenen' });
+      uit.innerHTML = r.plan.length
+        ? `<p>${r.plan.length} map(pen) gaan verhuizen:</p><ul>${r.plan.map((p) => `<li>${esc(p.van)} → ${esc(p.naar)}</li>`).join('')}</ul>`
+        : '<p>✓ Alles staat al op zijn plek.</p>';
+      if (r.blijft.length) uit.innerHTML += `<p class="code">Blijft staan (niet in het opdrachtenoverzicht): ${r.blijft.map(esc).join(', ')}</p>`;
+      $('ord-doe').disabled = !r.plan.length;
+    } catch (e) { toonFout(uit, e); }
+  };
+  $('ord-doe').onclick = async () => {
+    const uit = $('ord-uit'), knop = $('ord-doe'); knop.disabled = true;
+    try {
+      let r, totaal = 0;
+      do { r = await api({ actie: 'ordenen', uitvoeren: true }); totaal += r.verplaatst; uit.textContent = `Verplaatst: ${totaal}, nog ${r.rest} te gaan…`; } while (r.rest > 0 && r.verplaatst > 0);
+      uit.className = 'uit'; uit.textContent = `✓ ${totaal} map(pen) verplaatst.` + (r.blijft.length ? ' Blijft staan: ' + r.blijft.join(', ') : '');
+    } catch (e) { toonFout(uit, e); knop.disabled = false; }
+  };
   async function laad() {
     $('lijst').innerHTML = '<p class="code">Laden…</p>';
     try {
       const { lijst } = await api({ actie: 'lijst' });
-      $('login').hidden = true; $('tabs').hidden = false;
+      $('login').hidden = true; $('tabs').hidden = false; $('ordenen').hidden = false;
       const zelf = lijst.filter((o) => o.Pakket === 'Zelf maken'), films = lijst.filter((o) => o.Pakket !== 'Zelf maken');
       $('lijst').innerHTML = films.length ? '' : '<p class="code">Nog geen filmopdrachten.</p>';
       films.forEach((o) => $('lijst').appendChild(kaart(o)));

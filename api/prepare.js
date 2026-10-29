@@ -1,5 +1,5 @@
 // Maakt (of vindt) de klantmap met vier fasemappen in Drive en geeft ondertekende map-id's terug.
-import { ROOT_NAME, rootMap, FASES, sign, check, googleToken, folder, fail, leesOpdrachten, filmMapNaam, filmMappen } from './_lib.js';
+import { ROOT_NAME, rootMap, klantMap, FASES, sign, check, googleToken, folder, fail, leesOpdrachten, filmMapNaam, filmMappen } from './_lib.js';
 
 export default async (req, res) => {
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
@@ -7,8 +7,7 @@ export default async (req, res) => {
   if (!check(c, s)) return fail(res, 403, 'Ongeldige link');
   try {
     const t = await googleToken();
-    const root = await rootMap(t);
-    const klant = await folder(t, c, root);
+    const klant = await klantMap(t, c);
     const bestaand = await filmMappen(t, klant);
     // Film 2+: eigen submap 'Film n – naam' met dezelfde vakken.
     let ouder = klant;

@@ -189,10 +189,69 @@ function soort(o, code) {
   return o && o.Partner ? `🤝 Partner ${o.Partner}` : '📂 Verzamellink';
 }
 
+// ---- Indeling klantmappen ----
+// Onder de hoofdmap staan vier categoriemappen. Elke klantmap heet "<datum> <naam>" (datum van de uitvaart, anders van de
+// aanvraag) en draagt zijn code in appProperties.code. Opzoeken gaat op die code, zodat hernoemen of verplaatsen niets breekt.
+// Oude klantmappen (naam = code, direct onder de hoofdmap) worden nog gevonden tot ze via beheer → Drive ordenen zijn verplaatst.
+const MAP = 'application/vnd.google-apps.folder';
+const CATEGORIE = { film: '1 Films (door Daan)', verzamel: '2 Verzamellinks consument', partner: '3 Uitvaartondernemers', test: '4 Tests' };
+const TEST = /\b(test|tests|testje|tester|proef|proefje)\b|\b(freekje|patrijsjes|achmedi)\b|^(jantje|jantje theo bv|daantje|daantje daantje)$/i;
+const schoon = (s) => String(s || '').replace(/[\/\\:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+const familie = (o) => String((o && o.Naam) || '').replace(/ \(voor .*\)$/, '');
+function categorie(o, code) {
+  if (o && (TEST.test(familie(o).trim()) || TEST.test(String(o.Partner || '').trim()))) return [CATEGORIE.test];
+  if (!String(code).startsWith('zelf-')) return [CATEGORIE.film];
+  if (o && o.Partner) return [CATEGORIE.partner, schoon(o.Partner)];
+  return [CATEGORIE.verzamel];
+}
+function klantNaam(o, code) {
+  const u = String((o && o['Datum uitvaart']) || '');
+  const a = /^(\d{1,2})-(\d{1,2})-(\d{4})/.exec(String((o && o.Aanvraag) || ''));
+  const datum = /^\d{4}-\d{2}-\d{2}/.test(u) ? u.slice(0, 10) : a ? `${a[3]}-${a[2].padStart(2, '0')}-${a[1].padStart(2, '0')}` : '';
+  return ((datum ? datum + ' ' : '') + (schoon(familie(o)) || code)).trim();
+}
+const qEsc = (v) => String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+async function zoekKlantMap(t, code) {
+  const f = 'files?orderBy=createdTime&fields=files(id,name)&q=';
+  let l = await drive(t, f + encodeURIComponent(`appProperties has { key='code' and value='${qEsc(code)}' } and mimeType='${MAP}' and trashed=false`));
+  if (l.files.length) return l.files[0].id;
+  l = await drive(t, f + encodeURIComponent(`name='${qEsc(code)}' and mimeType='${MAP}' and trashed=false`)); // oude stijl
+  return l.files.length ? l.files[0].id : null;
+}
+async function categorieMap(t, pad) {
+  let ouder = await rootMap(t);
+  for (const n of pad) ouder = await folder(t, n, ouder);
+  return ouder;
+}
+// Vindt de klantmap bij een code, of maakt hem aan in de juiste categorie. o = regel uit het opdrachtenoverzicht (optioneel).
+async function klantMap(t, code, { o } = {}) {
+  const al = await zoekKlantMap(t, code);
+  if (al) return al;
+  if (o === undefined) { try { o = (await leesOpdrachten(t)).find((r) => r.Code === code) || null; } catch { o = null; } }
+  const ouder = await categorieMap(t, categorie(o, code));
+  const nieuw = await drive(t, 'files?fields=id', { method: 'POST', body: JSON.stringify({ name: klantNaam(o, code), mimeType: MAP, parents: [ouder], appProperties: { code } }) });
+  // Twee verzoeken tegelijk? Dan wint de oudste map en verdwijnt de nieuwe.
+  const eerste = await zoekKlantMap(t, code);
+  if (eerste && eerste !== nieuw.id) { await drive(t, `files/${nieuw.id}`, { method: 'PATCH', body: JSON.stringify({ trashed: true }) }); return eerste; }
+  return nieuw.id;
+}
+// Alle klantmappen (ook oude, nog niet geordende), met hun code.
+async function alleKlantmappen(t) {
+  const root = await rootMap(t);
+  const kind = async (id) => (await drive(t, 'files?pageSize=1000&fields=files(id,name,createdTime,appProperties)&q=' + encodeURIComponent(`'${id}' in parents and mimeType='${MAP}' and trashed=false`))).files;
+  const cats = Object.values(CATEGORIE), uit = [];
+  for (const k of await kind(root)) {
+    if (k.name === CATEGORIE.partner) { for (const p of await kind(k.id)) uit.push(...(await kind(p.id))); }
+    else if (cats.includes(k.name)) uit.push(...(await kind(k.id)));
+    else uit.push(k);
+  }
+  return uit.map((k) => ({ ...k, code: (k.appProperties || {}).code || k.name }));
+}
+
 // ---- Film in Drive ----
 const FILMMAP = '5 Film';
 async function filmMap(token, code) {
-  const klant = await folder(token, code, await rootMap(token));
+  const klant = await klantMap(token, code);
   return folder(token, FILMMAP, klant);
 }
 async function nieuwsteFilm(token, code) {
@@ -261,5 +320,5 @@ uitvaart-portret.nl`;
     text: `${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`, html: mailHtml(`${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`) });
 }
 
-export { ROOT_NAME, rootMap, FASES, DIASHOW, DOWNLOAD_PRIJS, DIASHOW_PRIJS, DIASHOW_EXTRA, PARTNER, diashowPrijs, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB, filmMapNaam, filmMappen, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
+export { ROOT_NAME, rootMap, klantMap, alleKlantmappen, categorie, categorieMap, klantNaam, CATEGORIE, FASES, DIASHOW, DOWNLOAD_PRIJS, DIASHOW_PRIJS, DIASHOW_EXTRA, PARTNER, diashowPrijs, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB, filmMapNaam, filmMappen, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
   mail, mailHtml, isMail, soort, waNummer, filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, lever };
