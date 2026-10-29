@@ -151,11 +151,11 @@
       if (!x.muziekBestanden) return n ? naam + 'nog geen muziekbestand (mp3); dan maak ik de diashow met de hand, met de opgegeven muziek.' : '';
       if (!d || n < 2) return '';
       const max = 1 + Math.floor(d / 5), per = d / (n - 1);
-      if (n > max) return naam + `te veel foto’s voor de muziek (${mmss(d)}). Elke foto staat minstens 5 seconden, dus er passen er ${max}; nu ${n}. De diashow wordt dan langer dan de muziek en loopt aan het eind stil door. Laat de familie er ${n - max} weghalen of een nummer toevoegen.`;
-      if (per > 12) return naam + `de muziek (${mmss(d)}) is lang voor ${n} foto’s: elke foto staat ${Math.round(per)} seconden. Mooier is minstens ${1 + Math.ceil(d / 12)} foto’s.`;
+      if (n > max) return naam + `de diashow wordt het mooiste met ongeveer ${max} foto’s bij deze muziek (${mmss(d)}, minstens 5 seconden per foto, plus de eerste foto). Er zijn er nu ${n}; met ${n - max} minder, of een tweede nummer erbij, past het precies. Laat u het zo, dan loopt de diashow na de muziek nog even stil door.`;
+      if (per > 12) return naam + `bij ${n} foto’s staat elke foto zo’n ${Math.round(per)} seconden (de muziek duurt ${mmss(d)}). Met wat meer foto’s (rond de ${1 + Math.ceil(d / 8)}) of een korter nummer wordt het levendiger.`;
       return '';
     }).filter(Boolean);
-    $('ds-noot').innerHTML = checks.length ? '<br><strong style="color:#7A4A12">Let op:</strong> ' + checks.map(esc).join('<br>') : '';
+    $('ds-noot').innerHTML = checks.length ? '<br><strong style="color:#7A4A12">Tip:</strong> ' + checks.map(esc).join('<br>') : '';
     const totaal = (j.prijs || 0) + (j.partner ? 0 : dsBedrag), totaalTekst = '€' + (Number.isInteger(totaal) ? totaal : totaal.toFixed(2).replace('.', ','));
     let f = 0, v = 0;
     // Meerdere films (bijv. familie, vrienden, werk): per film een kop met totaal, de periodes en de muziek.

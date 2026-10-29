@@ -327,8 +327,9 @@
     let t = '';
     if (ZELF && d > 0 && n >= 2) {
       const max = 1 + Math.floor(d / 5), per = d / (n - 1);
-      if (n > max) t = `Te veel foto’s voor deze muziek (${mmss(d)}): elke foto staat minstens 5 seconden, dus er passen er maximaal ${max}. Nu: ${n}. Haal er ${n - max} weg, of voeg nog een nummer toe.`;
-      else if (per > 12) t = `De muziek (${mmss(d)}) is lang voor ${n} foto’s: elke foto zou ${Math.round(per)} seconden staan. Mooier is minstens ${1 + Math.ceil(d / 12)} foto’s, of een korter nummer. Voegen anderen nog foto’s toe, dan is het misschien al goed.`;
+      // Rekensom: de eerste foto staat 5 s zonder muziek; de muziek begint bij foto 2 en elke foto daarna staat minstens 5 s.
+      if (n > max) t = `Een tip: de diashow wordt het mooiste met ongeveer ${max} foto’s bij deze muziek. Het nummer duurt ${mmss(d)} en elke foto krijgt graag minstens 5 seconden; dat is ruimte voor ${max - 1} foto’s op de muziek, plus de eerste foto. U heeft er nu ${n}, dus ${n - max} minder werkt het fijnst. Wilt u ze allemaal houden? Dan past een tweede nummer erbij heel goed.`;
+      else if (per > 12) t = `Een tip: bij ${n} foto’s staat elke foto nu zo’n ${Math.round(per)} seconden, want het nummer duurt ${mmss(d)}. Met wat meer foto’s (rond de ${1 + Math.ceil(d / 8)}) of een korter nummer wordt het levendiger. Voegen anderen nog foto’s toe, dan komt het vanzelf goed.`;
     }
     el.textContent = t; el.classList.toggle('hidden', !t);
   }
