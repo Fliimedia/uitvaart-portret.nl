@@ -32,6 +32,7 @@
   .knop:disabled { opacity:.45; cursor:default; }
   .rij { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
   label.akkoord { display:flex; gap:12px; align-items:flex-start; margin:14px 0 18px; font-size:15px; }
+  .aftellen { margin:10px 0 0; padding:10px 14px; border-radius:12px; background:#F6E7D3; color:#7A4A12; font-weight:600; }
   label.optie { padding:14px 16px; border-radius:14px; background:#EFE9DF; }
   label.akkoord input { width:22px; height:22px; margin:2px 0 0; flex-shrink:0; accent-color:var(--green); }
   .fout { color:#8A3B2E; }
@@ -53,6 +54,7 @@
   <div id="pagina" class="hidden">
     <h1 id="titel">Uw verzameling</h1>
     <p class="muted" id="sub">Hier ziet u wat de familie heeft aangeleverd. Deze pagina is alleen voor u.</p>
+    <p class="aftellen hidden" id="aftellen"></p>
 
     <section class="box" id="delen-box">
       <h2>Deel de verzamellink</h2>
@@ -128,6 +130,13 @@
     $('laden').classList.add('hidden'); $('pagina').classList.remove('hidden');
     $('titel').textContent = 'Uw verzameling' + (j.naam ? ', ' + j.naam : '');
     if (j.datum) $('sub').textContent = 'Hier ziet u wat de familie heeft aangeleverd. Uitvaart: ' + j.datum + '. Deze pagina is alleen voor u.';
+    // Aftellen naar de uitvaart (datum als JJJJ-MM-DD): afronden uiterlijk de dag ervoor.
+    const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(j.datum || '');
+    const over = dm ? Math.round((Date.UTC(+dm[1], +dm[2] - 1, +dm[3]) - Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())) / 864e5) : null;
+    $('aftellen').classList.toggle('hidden', over === null || over < 0 || /^(Betaald|Omzetten|Geleverd)/.test(j.download || ''));
+    if (over !== null) $('aftellen').textContent = over === 0 ? 'Vandaag is de uitvaart. Rond zo snel mogelijk af, of bel of app 06 18 42 48 58.'
+      : over === 1 ? 'Morgen is de uitvaart. Rond vandaag af, dan staat alles op tijd klaar.'
+      : `Nog ${over} dagen tot de uitvaart. Rond uiterlijk de dag ervoor af, dan staat alles op tijd klaar.`;
     const prijs = j.prijsTekst || '€' + j.prijs, meer = (j.films || []).length > 1;
     // Let op: bij een partner vervangt toon() de zin met #prijs; bij een tweede keer (na afronden of Vernieuwen) bestaat hij dan niet meer.
     if ($('prijs')) $('prijs').textContent = prijs + (meer && !j.partner ? ` (${j.films.length} films: €39 + €12,99 per extra film)` : '');

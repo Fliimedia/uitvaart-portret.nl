@@ -73,6 +73,26 @@ uitvaart-portret.nl`;
             text: `De download van ${o.Code} is betaald maar nog niet geleverd. Ik probeer het opnieuw; kijk anders in Google Cloud Run.`, html: mailHtml(`De download van ${o.Code} is betaald maar nog niet geleverd. Ik probeer het opnieuw; kijk anders in Google Cloud Run.`) });
           await startOmzetten(t, o); gedaan.omzet = (gedaan.omzet || 0) + 1;
         }
+        // Twee dagen na de aanvraag nog niets binnen: de aanvrager eraan herinneren de link te delen (één keer).
+        const aanv = /^(\d{1,2})-(\d{1,2})-(\d{4})/.exec(o.Aanvraag || '');
+        const oud = aanv ? (Date.now() - Date.UTC(+aanv[3], +aanv[2] - 1, +aanv[1])) / 864e5 : 0;
+        if (!d && aanv && oud >= 2 && oud < 10 && !o['Upload ontvangen'] && isMail(o.Contact) && !/Herinnering delen/.test(o.Notities || '')) {
+          const tekst = `${o.Partner ? 'Hallo,' : 'Beste ' + String(o.Naam || '').replace(/ \(voor .*\)$/, '') + ','}
+
+Er zijn via de verzamellink${o.Partner ? ' van ' + o.Naam : ''} nog geen foto’s binnengekomen. Dat kan natuurlijk kloppen, er komt veel op je af.
+
+Het helpt om de link één keer in de familie-app te zetten: iedereen kan dan vanaf de eigen telefoon foto’s toevoegen, ook papieren foto’s (die fotografeer je met de telefoon). Deel de link vanaf uw beheerpagina:
+${beheerLink(o.Code)}
+
+Lukt het niet, of heeft u vragen? Bel of app 06 18 42 48 58.
+
+Hartelijke groet,
+Daan Lubbers
+uitvaart-portret.nl`;
+          await mail({ to: o.Contact.trim(), subject: 'Nog geen foto’s binnen via de verzamellink', text: tekst, html: mailHtml(tekst) });
+          await logOpdracht(t, o.Code, { Notities: `${o.Notities ? o.Notities + '; ' : ''}Herinnering delen ${nu()}` });
+          o.Notities = `${o.Notities ? o.Notities + '; ' : ''}Herinnering delen ${nu()}`;
+        }
         const morgen = new Date(Date.now() + 864e5).toLocaleString('sv-SE', { timeZone: 'Europe/Amsterdam' }).slice(0, 10);
         if (!d && o['Datum uitvaart'] === morgen && isMail(o.Contact) && !/Herinnering afronden/.test(o.Notities || '')) {
           const tekst = `${o.Partner ? 'Hallo,' : 'Beste ' + String(o.Naam || '').replace(/ \(voor .*\)$/, '') + ','}
