@@ -155,6 +155,20 @@ function vul(s, l) {
 export const afmeldLink = (mail) => `https://uitvaart-portret.nl/api/afmelden?e=${encodeURIComponent(mail)}&s=${sign('afmeld:' + mail.toLowerCase())}`;
 const voet = (mail) => `\n\n--\nuitvaart-portret.nl · Goosebump Media · Land van Cocagneplein 28, 1093 NB Amsterdam\nGeen berichten meer van mij ontvangen? Antwoord met "stop" of klik: ${afmeldLink(mail)}`;
 
+// Beelden in een mail: een regel [beeld: bestand.jpg | bijschrift] wordt een plaatje uit assets/mail/ (alleen in de HTML-versie; de tekstversie laat de regel weg).
+const BEELD = /^\[beeld:\s*([\w.-]+)\s*(?:\|\s*(.*?))?\s*\]$/;
+export const platte = (tekst) => tekst.split('\n').filter((r) => !BEELD.test(r.trim())).join('\n').replace(/\n{3,}/g, '\n\n');
+const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const link = (x) => esc(x).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" style="color:#4B5A48">${u}</a>`);
+export function htmlVan(tekst, mail) {
+  const blokken = tekst.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean).map((b) => {
+    const m = BEELD.exec(b);
+    if (m) return `<p style="margin:18px 0"><img src="https://uitvaart-portret.nl/assets/mail/${m[1]}" alt="${esc(m[2] || '')}" width="520" style="max-width:100%;height:auto;border:1px solid #E2D9CC;border-radius:10px;display:block">${m[2] ? `<span style="font-size:13px;color:#6A6F6B">${esc(m[2])}</span>` : ''}</p>`;
+    return `<p style="margin:0 0 14px">${link(b).replace(/\n/g, '<br>')}</p>`;
+  }).join('');
+  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;color:#222;max-width:560px">${blokken}<p style="margin:26px 0 0;font-size:12px;color:#6A6F6B">uitvaart-portret.nl · Goosebump Media · Land van Cocagneplein 28, 1093 NB Amsterdam<br>Geen berichten meer van mij ontvangen? Antwoord met "stop" of <a href="${afmeldLink(mail)}" style="color:#6A6F6B">meld je af</a>.</p></div>`;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return fail(res, 405, 'Alleen POST');
   const b = req.body || {};
@@ -181,7 +195,7 @@ export default async function handler(req, res) {
       const { Resend } = await import('resend');
       const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
         from: 'Daan Lubbers <info@uitvaart-portret.nl>', to: naar, replyTo: 'info@uitvaart-portret.nl',
-        subject: '[TEST] ' + String(b.onderwerp || '').slice(0, 200), text: String(b.tekst || '').slice(0, 8000) + voet(naar),
+        subject: '[TEST] ' + String(b.onderwerp || '').slice(0, 200), text: platte(String(b.tekst || '').slice(0, 8000)) + voet(naar), html: htmlVan(String(b.tekst || '').slice(0, 8000), naar),
       });
       if (error) throw new Error('Resend: ' + JSON.stringify(error));
       return res.json({ ok: true, naar });
@@ -196,7 +210,7 @@ export default async function handler(req, res) {
       const { Resend } = await import('resend');
       const { error } = await new Resend(process.env.RESEND_API_KEY).emails.send({
         from: 'Daan Lubbers <info@uitvaart-portret.nl>', to: naar, replyTo: 'info@uitvaart-portret.nl',
-        subject: onderwerp, text: tekst + voet(naar),
+        subject: onderwerp, text: platte(tekst) + voet(naar), html: htmlVan(tekst, naar),
         headers: { 'List-Unsubscribe': `<${afmeldLink(naar)}>, <mailto:info@uitvaart-portret.nl?subject=stop>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
       });
       if (error) throw new Error('Resend: ' + JSON.stringify(error));
