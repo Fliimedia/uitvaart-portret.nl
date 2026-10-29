@@ -145,7 +145,7 @@ export const eerder = (l) => !!l['Mail 1'] && String(l['Mail 1']) < EERDER_VOOR;
 export function volgende(l) {
   if (KLAAR.test(l.Status) || !isMail(l['E-mail'])) return 0;
   if (!l['Mail 1']) return 1;
-  if (!l['Mail 2']) return dagen(l['Mail 1']) >= WACHT[2] ? 2 : 0;
+  if (!l['Mail 2']) return dagen(l['Mail 1']) >= (eerder(l) ? 0 : WACHT[2]) ? 2 : 0; // eerdere reeks: mail 2 direct aan de beurt
   if (!l['Mail 3']) return dagen(l['Mail 2']) >= WACHT[3] ? 3 : 0;
   return 0;
 }
