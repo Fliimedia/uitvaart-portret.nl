@@ -140,6 +140,9 @@
     };
     const om = k.querySelector('.omzet');
     if (om) om.onclick = async (ev) => {
+      const loopt = /^(Betaald|Omzetten) (\d{4}-\d{2}-\d{2} \d{2}:\d{2})/.exec(o.Download || '');
+      if (loopt && Date.now() - Date.parse(loopt[2].replace(' ', 'T')) < 60 * 60e3 &&
+        !confirm(`Er loopt al een omzetting sinds ${loopt[2].slice(11)}. De server negeert een tweede opdracht zolang die bezig is (tot een uur). Wacht liever op de mail. Toch opnieuw proberen?`)) return;
       if (!confirm('Alles omzetten en de downloadlink mailen, zonder betaling?')) return;
       ev.target.disabled = true;
       try { toonUit(uit, await api({ actie: 'omzet', code: o.Code })); } catch (e) { toonFout(uit, e); }

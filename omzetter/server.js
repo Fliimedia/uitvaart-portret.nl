@@ -315,7 +315,8 @@ export async function verwerk(o) {
   let muziekBestanden = 0;
   try {
     if (films.length > 1) for (const f of await d.lijst(o.diashow)) if (f.mimeType !== 'application/vnd.google-apps.folder') await d.weg(f.id); // resten van een eerdere enkele film
-    if (o.downloads) for (const f of await d.lijst(o.downloads)) await d.weg(f.id); // oude zips weg
+    // Oude zips in Drive weg, maar links.json blijft: zo werkt de vorige download tot de nieuwe klaar is.
+    if (o.downloads) for (const f of await d.lijst(o.downloads)) if (f.name !== 'links.json') await d.weg(f.id);
     for (const film of films) {
       // Per film één zip (zonder extra compressie: jpg en mp4 zijn al gecomprimeerd) voor de downloadpagina.
       const label = films.length > 1 ? `Film ${film.nr || 1}` + (film.naam ? ' – ' + film.naam : '') : 'Klaar voor diashow';
@@ -346,8 +347,16 @@ export async function verwerk(o) {
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
-  const r = await fetch(o.terug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actie: 'omgezet', job: o.job, aantal, fouten, zips, diashows, muziekBestanden }) });
-  console.log('Klaar', o.code, films.length, 'film(s),', aantal, 'omgezet,', fouten.length, 'fouten,', diashows.length, 'diashow(s), terugmelding', r.status);
+  // Terugmelden aan de site; lukt dat niet (bijv. 504 bij een trage start), dan nog een paar keer proberen.
+  const body = JSON.stringify({ actie: 'omgezet', job: o.job, aantal, fouten, zips, diashows, muziekBestanden });
+  let status = 0;
+  for (const wacht of [0, 10, 30, 90, 180]) {
+    if (wacht) await new Promise((ok) => setTimeout(ok, wacht * 1000));
+    try { status = (await fetch(o.terug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(90000) })).status; }
+    catch (e) { status = 0; console.error('Terugmelding mislukt', o.code, e.message); }
+    if (status >= 200 && status < 300) break;
+  }
+  console.log('Klaar', o.code, films.length, 'film(s),', aantal, 'omgezet,', fouten.length, 'fouten,', diashows.length, 'diashow(s), terugmelding', status);
 }
 
 // ---------- Webserver ----------

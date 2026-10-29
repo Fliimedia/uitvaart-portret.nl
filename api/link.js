@@ -334,6 +334,9 @@ async function omgezet(res, { job, aantal, fouten, zips, diashows, muziekBestand
   // Links voor de downloadpagina bewaren in de map Downloads (wordt na 30 dagen opgeruimd).
   if (lijst.length) try {
     const map = await folder(t, DOWNLOADS, m.klant);
+    // Vorige links.json weg (die bleef staan zolang de nieuwe omzetting liep).
+    const oud = (await drive(t, 'files?fields=files(id)&q=' + encodeURIComponent(`'${map}' in parents and name='links.json' and trashed=false`))).files;
+    for (const f of oud) await drive(t, `files/${f.id}`, { method: 'PATCH', body: JSON.stringify({ trashed: true }) });
     const grens = 'dl' + Date.now();
     const body = `--${grens}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` + JSON.stringify({ name: 'links.json', parents: [map] }) +
       `\r\n--${grens}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(lijst)}\r\n--${grens}--`;
@@ -453,7 +456,8 @@ async function downloadInfo(res, { c, d }) {
   const t = await googleToken();
   const o = await zoek(t, c);
   const verlopen = () => res.json({ verlopen: true, naam: o ? voornaam(o) : '', partner: (o && o.Partner) || '' });
-  if (!o || !/^Geleverd/.test(o.Download || '')) return o && /^(Betaald|Omzetten)/.test(o.Download || '') ? res.json({ bezig: true, naam: voornaam(o), partner: o.Partner || '' }) : verlopen();
+  const nieuw = !!o && /^(Betaald|Omzetten)/.test(o.Download || '');
+  if (!o || (!nieuw && !/^Geleverd/.test(o.Download || ''))) return verlopen();
   const klant = await folder(t, c, await rootMap(t));
   const binnen = await submappen(t, klant);
   const map = (binnen[DOWNLOADS] || [])[0];
@@ -466,8 +470,10 @@ async function downloadInfo(res, { c, d }) {
     let films = [];
     try { films = await drive(t, `files/${json.id}?alt=media`); } catch (e) { console.error('links.json lezen', e); }
     const tot = new Date(Date.parse(json.createdTime) + 30 * 864e5).toLocaleDateString('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'long' });
-    return res.json({ naam: voornaam(o), partner: o.Partner || '', tot, drive: diashow ? 'https://drive.google.com/drive/folders/' + diashow : '', films: Array.isArray(films) ? films : [] });
+    // Loopt er een nieuwe omzetting, dan blijft de vorige download werken (met een melding op de pagina).
+    return res.json({ naam: voornaam(o), partner: o.Partner || '', tot, nieuw, drive: diashow ? 'https://drive.google.com/drive/folders/' + diashow : '', films: Array.isArray(films) ? films : [] });
   }
+  if (nieuw) return res.json({ bezig: true, naam: voornaam(o), partner: o.Partner || '' });
   if (!zips.length && !diashow) return verlopen();
   // Zonder zips (oudere leveringen): alleen de Drive-map.
   const tot = zips.length ? new Date(Date.parse(zips[0].createdTime) + 30 * 864e5).toLocaleDateString('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'long' }) : '';

@@ -81,7 +81,7 @@
       if (j.bezig) return fout('Bijna klaar', 'De bestanden worden nog omgezet. Dat duurt meestal een paar minuten; u krijgt een mail zodra alles klaarstaat.');
       $('laden').classList.add('hidden'); $('pagina').classList.remove('hidden');
       $('titel').textContent = 'De foto’s' + (j.naam ? ' van ' + j.naam : '') + ' staan klaar';
-      $('van').textContent = j.partner ? 'Verzamellink van ' + j.partner : '';
+      $('van').textContent = (j.partner ? 'Verzamellink van ' + j.partner : '') + (j.nieuw ? (j.partner ? ' · ' : '') + 'Er wordt nu een nieuwe versie gemaakt; u krijgt een mail zodra die klaarstaat. Tot dan kunt u deze versie downloaden.' : '');
       const films = j.films || [];
       $('films').innerHTML = films.length
         ? (films.length > 1 ? '<h2>Per film één download</h2>' : '<h2>Download</h2>') + films.map((f) =>
