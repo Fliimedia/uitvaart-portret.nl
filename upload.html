@@ -40,6 +40,7 @@
   .port { left:6px; right:6px; bottom:6px; height:28px; border-radius:14px; background:rgba(255,255,255,.88); font-size:13px; font-weight:600; color:var(--muted); }
   .thumb.portret .port { background:var(--green); color:#fff; }
   .thumb.dubbel { border-color:#C9822B; }
+  .check { margin:0 0 8px; padding:6px 10px; border-radius:10px; background:#F6E7D3; color:#7A4A12; font-size:13px; line-height:1.4; }
   .thumb .dub { position:absolute; left:6px; right:42px; top:46px; padding:3px 6px; border-radius:8px; background:#C9822B; color:#fff; font-size:11px; font-weight:600; text-align:center; pointer-events:none; }
   .nummer { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
   .nummer input { height:48px; box-sizing:border-box; padding:0 14px; border:1px solid var(--line); border-radius:12px; font:inherit; font-size:16px; background:#fff; color:var(--ink); min-width:0; }
@@ -142,6 +143,7 @@
 
 <div class="bar" id="bar">
   <div class="vakken hidden" id="vakken" aria-label="Welke periodes hebben al foto's"></div>
+  <p class="check hidden" id="check"></p>
   <div class="bar-in">
     <span class="telling" id="telling"><strong>0</strong> foto's · 60 inbegrepen</span>
     <button class="send" id="verstuur" disabled>Verstuur</button>
@@ -230,7 +232,21 @@
           const a = (y * 9 + x) * 4, b = a + 4;
           bits.push(p[a] + p[a + 1] + p[a + 2] > p[b] + p[b + 1] + p[b + 2] ? 1 : 0);
         }
-        i.hash = bits; markeerDubbel();
+        i.hash = bits;
+        // Foto-check: te klein voor een groot scherm, of waarschijnlijk onscherp (weinig randen na verkleinen).
+        const px = img.naturalWidth * img.naturalHeight;
+        i.klein = px > 0 && px < 640 * 480;
+        const bw = 256, bh = Math.max(8, Math.round(256 * img.naturalHeight / Math.max(1, img.naturalWidth)));
+        const cs = document.createElement('canvas'); cs.width = bw; cs.height = bh;
+        const cy = cs.getContext('2d', { willReadFrequently: true }); cy.drawImage(img, 0, 0, bw, bh);
+        const q = cy.getImageData(0, 0, bw, bh).data, g = new Float32Array(bw * bh);
+        for (let k = 0; k < bw * bh; k++) g[k] = 0.299 * q[k * 4] + 0.587 * q[k * 4 + 1] + 0.114 * q[k * 4 + 2];
+        let s1 = 0, s2 = 0, n = 0;
+        for (let y = 1; y < bh - 1; y++) for (let x = 1; x < bw - 1; x++) {
+          const k = y * bw + x, l = 4 * g[k] - g[k - 1] - g[k + 1] - g[k - bw] - g[k + bw]; s1 += l; s2 += l * l; n++;
+        }
+        i.wazig = n > 0 && !i.klein && (s2 / n - (s1 / n) ** 2) < 12;
+        markeerDubbel();
       } catch (e) {}
     };
     img.src = i.url;
@@ -348,12 +364,12 @@
       grid.innerHTML = '';
       items.filter(i => i.fase === f && i.film === films[huidig].nr).forEach(i => {
         const d = document.createElement('div');
-        d.className = 'thumb' + (i.id === portretId ? ' portret' : '') + (i.dubbel ? ' dubbel' : '');
+        d.className = 'thumb' + (i.id === portretId ? ' portret' : '') + (i.dubbel || i.klein || i.wazig ? ' dubbel' : '');
         const media = i.mime.startsWith('image/')
           ? `<img src="${i.url}" alt="" loading="lazy">`
           : `<span class="naam">🎬</span>`;
         d.innerHTML = media +
-          (i.dubbel ? '<span class="dub">Lijkt dubbel</span>' : '') +
+          (i.dubbel ? '<span class="dub">Lijkt dubbel</span>' : i.klein ? '<span class="dub" title="Deze foto is klein en wordt op een groot scherm onscherp. Heeft u een grotere versie?">Klein bestand</span>' : i.wazig ? '<span class="dub" title="Deze foto lijkt onscherp. Heeft u een scherpere versie? Anders kan hij er gewoon in.">Lijkt onscherp</span>' : '') +
           `<button class="ster" aria-pressed="${i.star}" aria-label="Moet erin">${i.star ? '★' : '☆'}</button>
            <button class="weg" aria-label="Verwijderen">×</button>
            <button class="port">${i.id === portretId ? 'Portret ✓' : 'Portret'}</button>`;
@@ -374,6 +390,9 @@
     chips.classList.toggle('hidden', !items.length);
     chips.innerHTML = perVak.slice(0, 5).map((k, f) => `<button type="button" data-f="${f}" class="${k ? 'vol' : ''}">${k ? '✓ ' : ''}${KORT[f]}</button>`).join('');
     chips.querySelectorAll('button').forEach(btn => btn.onclick = () => $('vak' + btn.dataset.f).scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    const twijfel = items.filter(i => i.film === films[huidig].nr && (i.dubbel || i.klein || i.wazig)).length;
+    $('check').classList.toggle('hidden', !twijfel);
+    $('check').textContent = twijfel ? `${twijfel} foto${twijfel > 1 ? "'s" : ''} met een oranje rand: lijkt dubbel, klein of onscherp. Heeft u een betere versie, vervang hem dan. Anders gaan ze gewoon mee.` : '';
     const n = items.length, nf = items.filter(i => i.film === films[huidig].nr).length;
     $('telling').innerHTML = films.length > 1
       ? `<strong>${nf}</strong> in ${esc(filmNaam(films[huidig]))} · ${n} totaal` + (ZELF ? '' : ' · 60 per film inbegrepen')
