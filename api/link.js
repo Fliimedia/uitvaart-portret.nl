@@ -3,7 +3,7 @@
 // - Verzamellink (zelf maken): aanvragen, status bekijken, afsluiten en betalen (€39), en de terugkoppeling van de omzetserver.
 import crypto from 'crypto';
 import { sign, check, fail, nu, nuIso, logVeilig, logOpdracht, isMail, mail, mailHtml, googleToken, drive, folder, rootMap,
-  leesOpdrachten, deel, mollie, soort, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB } from './_lib.js';
+  leesOpdrachten, deel, mollie, soort, FASES, DIASHOW, DOWNLOAD_PRIJS, DIASHOW_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB } from './_lib.js';
 
 const DAAN = () => process.env.CONTACT_EMAIL || 'info@uitvaart-portret.nl';
 const SITE = 'https://www.uitvaart-portret.nl';
@@ -219,11 +219,12 @@ async function status(res, { c, b }) {
   }
   const prijs = downloadPrijs(films.length);
   res.json({ naam: voornaam(o), partner: o.Partner || '', datum: o['Datum uitvaart'] || '', uploadlink: o.Uploadlink || uploadLink(c), perFase, films,
-    muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekBestanden, download: o.Download || '', prijs, prijsTekst: euro(prijs), kijklink: kijkLink(c), downloadlink: /^Geleverd/.test(o.Download || '') ? downloadLink(c) : '' });
+    muziek: o.Muziek && o.Muziek !== 'NIET' ? o.Muziek : '', muziekBestanden, download: o.Download || '', prijs, prijsTekst: euro(prijs),
+    diashow: o.Diashow || '', diashowPrijs: DIASHOW_PRIJS * films.length, diashowTekst: euro(DIASHOW_PRIJS * films.length), kijklink: kijkLink(c), downloadlink: /^Geleverd/.test(o.Download || '') ? downloadLink(c) : '' });
 }
 
 // ---- 3. Afsluiten en betalen ----
-async function afsluiten(res, { c, b, akkoord }) {
+async function afsluiten(res, { c, b, akkoord, diashow }) {
   if (!String(c).startsWith('zelf-') || !check('beheer:' + c, b)) return fail(res, 403, 'Deze beheerlink klopt niet');
   const t = await googleToken();
   const o = await zoek(t, c);
@@ -231,23 +232,23 @@ async function afsluiten(res, { c, b, akkoord }) {
   if (/^(Betaald|Omzetten|Geleverd)/.test(o.Download || '')) return res.json({ status: o.Download });
   // Partnerlink: geen betaling; Daan factureert per maand.
   if (o.Partner) {
-    await logOpdracht(t, c, { Download: 'Betaald ' + nu() + ' (partner, op factuur)' });
-    await startOmzetten(t, { ...o, Download: 'Betaald' });
+    await logOpdracht(t, c, { Download: 'Betaald ' + nu() + ' (partner, op factuur)', Diashow: diashow ? 'Ja' : '' });
+    await startOmzetten(t, { ...o, Download: 'Betaald', Diashow: diashow ? 'Ja' : '' });
     return res.json({ status: 'Omzetten' });
   }
   if (!akkoord) return fail(res, 400, 'Vink eerst het akkoord aan');
   if (!process.env.MOLLIE_API_KEY) return fail(res, 500, 'Betalen is even niet mogelijk. Mail info@uitvaart-portret.nl');
   const terug = beheerLink(c) + '?terug=1';
   const nFilms = (await mappen(t, c, o)).films.length;
-  const bedrag = downloadPrijs(nFilms);
+  const bedrag = Math.round((downloadPrijs(nFilms) + (diashow ? DIASHOW_PRIJS * nFilms : 0)) * 100) / 100;
   const p = await mollie('payments', { method: 'POST', body: JSON.stringify({
     amount: { currency: 'EUR', value: bedrag.toFixed(2) },
-    description: `Download foto's ${voornaam(o)}${nFilms > 1 ? ' (' + nFilms + ' films)' : ''} [${c}]`.slice(0, 255),
+    description: `Download foto's ${voornaam(o)}${nFilms > 1 ? ' (' + nFilms + ' films)' : ''}${diashow ? ' + diashow' : ''} [${c}]`.slice(0, 255),
     redirectUrl: terug, webhookUrl: SITE + '/api/mollie', metadata: { code: c, soort: 'download' },
   }) });
   const wanneer = new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', dateStyle: 'long', timeStyle: 'short' });
   await logOpdracht(t, c, { Download: 'Betaling gestart ' + nu() + ' (' + p.id + ')',
-    'Akkoord voorwaarden': `ja, ${wanneer} (download verzamellink; herroepingsrecht vervalt bij levering)`, Bedrag: euro(bedrag) });
+    'Akkoord voorwaarden': `ja, ${wanneer} (download verzamellink; herroepingsrecht vervalt bij levering)`, Bedrag: euro(bedrag), Diashow: diashow ? 'Ja' : '' });
   res.json({ checkout: p._links.checkout.href });
 }
 
@@ -270,7 +271,7 @@ export async function startOmzetten(t, o, { opnieuw = false } = {}) {
   await logOpdracht(t, c, { Download: 'Omzetten ' + nuIso() });
   const r = await fetch(OMZET_URL.replace(/\/$/, '') + '/omzetten', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(45000),
-    body: JSON.stringify({ job, code: c, naam: voornaam(o), ...m, downloads: await folder(t, DOWNLOADS, m.klant), terug: SITE + '/api/link' }),
+    body: JSON.stringify({ job, code: c, naam: voornaam(o), ...m, downloads: await folder(t, DOWNLOADS, m.klant), diashow: !!o.Diashow, terug: SITE + '/api/link' }),
   }).catch((e) => {
     // Opstarten van de server kan even duren; de opdracht is dan meestal wel aangekomen. Het vangnet van de dagtaak pakt het anders op.
     if (e.name === 'TimeoutError' || e.name === 'AbortError') return { ok: true, traag: true };
@@ -293,7 +294,7 @@ async function omzetToken(res, { job }) {
 }
 
 // De omzetserver is klaar: map delen en de downloadlink mailen.
-async function omgezet(res, { job, aantal, fouten, zips }) {
+async function omgezet(res, { job, aantal, fouten, zips, diashows }) {
   const c = checkJob(job);
   if (!c) return fail(res, 403, 'Ongeldige opdracht');
   const t = await googleToken();
@@ -330,6 +331,16 @@ async function omgezet(res, { job, aantal, fouten, zips }) {
   const link = zipsOk ? downloadLink(c) : drivelink;
   const n = Math.max(0, parseInt(aantal, 10) || 0), mis = (Array.isArray(fouten) ? fouten : []).slice(0, 20).map((x) => kort(x, 150));
   const partner = o.Partner || '';
+  // Optie diashow: per film klaar (in de zip) of handwerk voor Daan (geen muziekbestand, of het lukte niet).
+  const ds = (Array.isArray(diashows) ? diashows : []).slice(0, 6).filter(Boolean);
+  const dsOk = ds.filter((x) => x.status === 'ok'), dsHand = ds.filter((x) => x.status !== 'ok');
+  const fl = (nr) => { const f = m.films.find((x) => x.nr === +nr); return m.films.length > 1 && f ? ' (' + filmLabel(f) + ')' : ''; };
+  const minSec = (s) => Math.floor(s / 60) + ':' + String(Math.round(s % 60)).padStart(2, '0');
+  const dsTekst = !ds.length ? '' : '\n\n' + [
+    dsOk.length ? `De diashow staat er ook bij, als mp4: ${dsOk.map((x) => 'Diashow' + fl(x.nr) + ', ' + minSec(x.duur) + ' minuten').join('; ')}. Eerst de portretfoto, dan de foto’s op de muziek, met zachte overgangen. Hij speelt af op elke computer en past in de systemen van crematoria en uitvaartcentra.` +
+      (dsOk.some((x) => x.teKort) ? ' Er waren veel foto’s voor de lengte van de muziek; daarom loopt de diashow na de muziek nog even stil door.' : '') : '',
+    dsHand.length ? `De diashow${dsHand.length > 1 || m.films.length > 1 ? 's' + dsHand.map((x) => fl(x.nr)).join('') : ''} maak ik met de hand, met de muziek die is opgegeven. U krijgt hem apart van mij, op tijd voor de uitvaart.` : '',
+  ].filter(Boolean).join('\n\n');
   const tekst = `${partner ? 'Hallo,' : 'Beste ' + voornaam(o) + ','}
 
 ${partner ? 'De foto’s van ' + voornaam(o) + ' staan klaar om te downloaden:' : 'Dank u wel. Alles staat klaar om te downloaden:'}
@@ -337,7 +348,7 @@ ${link}
 
 ${zipsOk ? (m.films.length > 1 ? 'Per film is er één knop om te downloaden.' : 'Met één knop downloadt u alles in één keer.') + ' Het werkt het makkelijkst op een computer.' : "Klik rechtsboven op 'Alles downloaden'; Google maakt er een zip van."}
 
-${m.films.length > 1 ? `Voor elke film is er een eigen map (${m.films.map(filmLabel).join(', ')}). Samen ${n} foto’s en filmpjes` : `Er staan ${n} foto’s en filmpjes klaar`} in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd: eerst de portretfoto, dan de periodes van het leven, daarna de hobbyfoto’s en de foto’s waarvan de familie twijfelde. Sleep ze in één keer in uw programma, zoals PowerPoint of Photostage. De muziek zit erbij${m.films.length > 1 ? ', per film' : ''}.${mis.length ? `\n\nDeze bestanden konden we niet omzetten (de originelen staan er wel):\n${mis.join('\n')}` : ''}
+${m.films.length > 1 ? `Voor elke film is er een eigen map (${m.films.map(filmLabel).join(', ')}). Samen ${n} foto’s en filmpjes` : `Er staan ${n} foto’s en filmpjes klaar`} in breedbeeld (1920x1080), rechtgezet en op volgorde genummerd: eerst de portretfoto, dan de periodes van het leven, daarna de hobbyfoto’s en de foto’s waarvan de familie twijfelde. Sleep ze in één keer in uw programma, zoals PowerPoint of Photostage. De muziek zit erbij${m.films.length > 1 ? ', per film' : ''}.${dsTekst}${mis.length ? `\n\nDeze bestanden konden we niet omzetten (de originelen staan er wel):\n${mis.join('\n')}` : ''}
 
 Download alles op tijd: na 30 dagen worden de bestanden automatisch verwijderd.
 
@@ -348,10 +359,12 @@ Daan Lubbers
 uitvaart-portret.nl`;
   if (isMail(o.Contact)) await mail({ to: o.Contact.trim(), subject: partner ? `Foto’s ${voornaam(o)} staan klaar om te downloaden` : 'Uw foto’s staan klaar om te downloaden', text: tekst, html: mailHtml(tekst), replyTo: DAAN() });
   await logOpdracht(t, c, { Download: 'Geleverd ' + nu() + ` (${n} bestanden${mis.length ? ', ' + mis.length + ' niet omgezet' : ''})`,
+    ...(ds.length ? { Diashow: dsHand.length ? 'Handwerk ' + nu() + ' (' + dsHand.map((x) => 'film ' + x.nr + ': ' + x.status).join(', ') + ')' : 'Geleverd ' + nu() } : {}),
     'Drive-map': 'https://drive.google.com/drive/folders/' + m.klant });
   try {
-    const d = `Download geleverd: ${c}\n${n} bestanden omgezet${mis.length ? '\nNiet omgezet:\n' + mis.join('\n') : ''}\n\nMap: https://drive.google.com/drive/folders/${m.klant}`;
-    await mail({ to: DAAN(), subject: `${soort(o)} · Download geleverd: ${voornaam(o) || c}`, text: d, html: mailHtml(d) });
+    const hand = dsHand.map((x) => `\nDIASHOW MET DE HAND, film ${x.nr}${fl(x.nr)}: ${x.status === 'geen muziek' ? 'geen muziekbestand' + (x.muziek && x.muziek.length ? '; opgegeven: ' + x.muziek.slice(0, 5).join(' / ') : '') + '. Zet een mp3 in de muziekmap en klik in beheer op Omzetten, of maak hem zelf.' : x.status}`).join('');
+    const d = `Download geleverd: ${c}\n${n} bestanden omgezet${ds.length ? '\nDiashow: ' + dsOk.length + ' klaar' + (dsHand.length ? ', ' + dsHand.length + ' handwerk' : '') : ''}${hand}${mis.length ? '\nNiet omgezet:\n' + mis.join('\n') : ''}\n\nMap: https://drive.google.com/drive/folders/${m.klant}`;
+    await mail({ to: DAAN(), subject: `${soort(o)} · ${dsHand.length ? 'Diashow met de hand nodig' : 'Download geleverd'}: ${voornaam(o) || c}`, text: d, html: mailHtml(d) });
   } catch (e) { console.error('Melding download', e); }
   res.json({ ok: true });
 }

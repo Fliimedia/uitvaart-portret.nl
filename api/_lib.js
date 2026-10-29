@@ -74,10 +74,11 @@ function fail(res, status, message) {
 const SHEET_NAME = 'Opdrachtenoverzicht';
 const KOLOMMEN = ['Code', 'Naam', 'Contact', 'Datum uitvaart', 'Aanvraag', 'Uploadlink', 'Upload ontvangen',
   "Aantal foto's", "Extra foto's (boven 60)", 'Akkoord voorwaarden', 'Drive-map', 'Concept', 'Betaald', 'Geleverd', 'Notities',
-  'Pakket', 'Bedrag', 'Betaallink', 'Film', 'Review gevraagd', 'Muziek', 'Download', 'Partner', 'Films'];
+  'Pakket', 'Bedrag', 'Betaallink', 'Film', 'Review gevraagd', 'Muziek', 'Download', 'Partner', 'Films', 'Diashow'];
 
 // Verzamellink (zelf maken): prijs van de download en adres van de omzetserver (Google Cloud Run, geen geheim).
 const DOWNLOAD_PRIJS = 39; // consument, incl. 21% btw (partner: €24,99 excl. btw, zie beheer.html)
+const DIASHOW_PRIJS = 10; // optie automatische diashow (mp4) per film: consument incl. btw, partner €10 excl. btw (zie beheer.html)
 const EXTRA_FILM_VERZAMEL = 12.99; // per extra film bij de verzamellink, consument incl. btw (partner: €9,99 excl. btw)
 
 // Meerdere films per opdracht: film 1 = de vakmappen in de klantmap; film 2+ = submap 'Film n – naam' met dezelfde vakken.
@@ -254,5 +255,5 @@ uitvaart-portret.nl`;
     text: `${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`, html: mailHtml(`${naam} (${code}) heeft betaald. ${note}\n\nFilm: ${link}`) });
 }
 
-export { ROOT_NAME, rootMap, FASES, DIASHOW, DOWNLOAD_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB, filmMapNaam, filmMappen, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
+export { ROOT_NAME, rootMap, FASES, DIASHOW, DOWNLOAD_PRIJS, DIASHOW_PRIJS, OMZET_URL, EXTRA_FILM_VERZAMEL, FILMSUB, filmMapNaam, filmMappen, sign, check, googleToken, drive, folder, fail, nu, nuIso, logOpdracht, logVeilig, leesOpdrachten,
   mail, mailHtml, isMail, soort, waNummer, filmMap, nieuwsteFilm, deel, berekenBedrag, mollie, lever };

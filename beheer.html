@@ -177,7 +177,7 @@
   }
 
   // ---- Partnerlinks: nieuwe link per familie + telling per partner voor de maandfactuur ----
-  const PARTNER_PRIJS = 24.99, GRATIS = 3, EXTRA_FILM = 9.99; // excl. btw per afgeronde link (+ per extra film); eerste 3 per partner helemaal gratis
+  const PARTNER_PRIJS = 24.99, GRATIS = 3, EXTRA_FILM = 9.99, DIASHOW = 10; // excl. btw per afgeronde link (+ per extra film); eerste 3 per partner helemaal gratis
   function partnerBlok(zelf) {
     const partners = {};
     zelf.filter((o) => o.Partner).forEach((o) => {
@@ -186,15 +186,15 @@
         p.totaal++;
         const m = /Geleverd (\d{1,2})-(\d{1,2})-(\d{4})/.exec(o.Download);
         const nu = new Date();
-        if (m && +m[2] === nu.getMonth() + 1 && +m[3] === nu.getFullYear()) p.maand.push({ code: o.Code, nr: p.totaal, extra: o.Films ? o.Films.split(' | ').length - 1 : 0 });
+        if (m && +m[2] === nu.getMonth() + 1 && +m[3] === nu.getFullYear()) p.maand.push({ code: o.Code, nr: p.totaal, extra: o.Films ? o.Films.split(' | ').length - 1 : 0, ds: o.Diashow ? (o.Films ? o.Films.split(' | ').length : 1) : 0 });
       }
     });
     const rijen = Object.entries(partners).map(([naam, p]) => {
-      const betaald = p.maand.filter((x) => x.nr > GRATIS), tellen = betaald.length, ef = betaald.reduce((a, x) => a + x.extra, 0);
-      const bedrag = Math.round((tellen * PARTNER_PRIJS + ef * EXTRA_FILM) * 100) / 100;
-      return `<tr><td>${esc(naam)}</td><td>${p.maand.length} deze maand</td><td>${tellen ? tellen + ' × ' + euro(PARTNER_PRIJS) + (ef ? ' + ' + ef + ' extra film' + (ef > 1 ? 's' : '') + ' × €9,99' : '') + ' = ' + euro(bedrag) + ' excl. btw' : 'nog gratis'}</td><td class="code">${p.totaal} totaal</td></tr>`;
+      const betaald = p.maand.filter((x) => x.nr > GRATIS), tellen = betaald.length, ef = betaald.reduce((a, x) => a + x.extra, 0), nds = betaald.reduce((a, x) => a + x.ds, 0);
+      const bedrag = Math.round((tellen * PARTNER_PRIJS + ef * EXTRA_FILM + nds * DIASHOW) * 100) / 100;
+      return `<tr><td>${esc(naam)}</td><td>${p.maand.length} deze maand</td><td>${tellen ? tellen + ' × ' + euro(PARTNER_PRIJS) + (ef ? ' + ' + ef + ' extra film' + (ef > 1 ? 's' : '') + ' × €9,99' : '') + (nds ? ' + ' + nds + ' diashow' + (nds > 1 ? 's' : '') + ' × €10' : '') + ' = ' + euro(bedrag) + ' excl. btw' : 'nog gratis'}</td><td class="code">${p.totaal} totaal</td></tr>`;
     }).join('');
-    const k = el(`<div class="kaart"><div class="kop"><div><h2>Nieuwe partnerlink</h2><div class="code">Voor een uitvaartondernemer: per familie een link, zonder betaalstap. De eerste ${GRATIS} per partner gratis, daarna ${euro(PARTNER_PRIJS)} excl. btw per afgeronde link (+ €9,99 per extra film) op de maandfactuur.</div></div></div>
+    const k = el(`<div class="kaart"><div class="kop"><div><h2>Nieuwe partnerlink</h2><div class="code">Voor een uitvaartondernemer: per familie een link, zonder betaalstap. De eerste ${GRATIS} per partner gratis, daarna ${euro(PARTNER_PRIJS)} excl. btw per afgeronde link (+ €9,99 per extra film, + €10 per diashow) op de maandfactuur.</div></div></div>
       <div class="rij"><input class="p-naam" list="p-lijst" placeholder="Partner, bijv. Mare Uitvaartbegeleiding" style="flex:1;min-width:220px"><datalist id="p-lijst">${Object.keys(partners).map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
         <input class="p-mail" type="email" placeholder="E-mailadres partner" style="flex:1;min-width:200px"></div>
       <div class="rij"><input class="p-fam" placeholder="Familie, bijv. Familie De Vries" style="flex:1;min-width:200px"><input class="p-datum" type="date">
@@ -222,7 +222,7 @@
     const k = el(`<div class="kaart">
       <div class="kop"><div><h2>${esc(o.Naam || o.Code)}</h2><div class="code">${esc(o.Code)} · ${esc(o.Contact || 'geen contact')}${o['Datum uitvaart'] ? ' · uitvaart ' + esc(o['Datum uitvaart']) : ''}</div></div>
         ${o['Drive-map'] ? `<a href="${esc(o['Drive-map'])}" target="_blank">Drive-map →</a>` : ''}</div>
-      <div class="chips">${o.Partner ? chip('Partner', o.Partner) : ''}${chip('Aangevraagd', (o.Aanvraag || '').replace(/ \(.*\)$/, ''))}${chip('Laatste upload', o['Upload ontvangen'])}${chip("Foto's", o["Aantal foto's"])}${o.Films && o.Films.includes(' | ') ? chip('Films', o.Films) : ''}${chip('Download', d)}</div>
+      <div class="chips">${o.Partner ? chip('Partner', o.Partner) : ''}${chip('Aangevraagd', (o.Aanvraag || '').replace(/ \(.*\)$/, ''))}${chip('Laatste upload', o['Upload ontvangen'])}${chip("Foto's", o["Aantal foto's"])}${o.Films && o.Films.includes(' | ') ? chip('Films', o.Films) : ''}${chip('Download', d)}${o.Diashow ? chip('Diashow', o.Diashow) : ''}</div>
       <div class="rij"><a href="${esc(o.Beheerlink || '#')}" target="_blank" class="licht" style="text-decoration:none;padding:10px 18px;border:1px solid #CFC4B4;border-radius:22px">Verzamelpagina van de klant →</a>
         ${o.Uploadlink ? `<a href="${esc(o.Uploadlink)}" target="_blank" class="code">Uploadlink</a>` : ''}</div>
       <div class="rij"><button type="button" class="licht omzet">${/^Geleverd/.test(d) ? 'Opnieuw omzetten en mailen' : 'Omzetten zonder betaling'}</button>

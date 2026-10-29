@@ -84,6 +84,53 @@ export async function video(invoer, uit) {
   catch (e) { if (!p.hdr) throw e; await run('ffmpeg', args(false), { maxBuffer: 1e8 }); } // tonemapping niet gelukt: zonder
 }
 
+// ---------- Automatische diashow (optie bij de verzamellink) ----------
+// Zelfde vorm als Daans films: eerste foto 8 s zonder muziek, daarna verdelen de foto's samen de lengte van de muziek,
+// zachte overgangen, aan het eind vloeit de laatste foto naar zwart-wit en dan naar zwart. Alleen foto's (filmpjes niet).
+const KOP = 8, OVER = 1, MIN = 2.5, MAX = 12;
+async function duur(bestand) {
+  const { stdout } = await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', bestand]);
+  return parseFloat(stdout) || 0;
+}
+export function diashowPlan(nFotos, muziekDuur) {
+  if (nFotos < 2) return null;
+  const rest = nFotos - 1;
+  const per = Math.min(MAX, Math.max(MIN, muziekDuur / rest));
+  const duren = [KOP, ...Array(rest).fill(per)];
+  return { duren, totaal: KOP + rest * per, perFoto: per, teKort: muziekDuur / rest < MIN, teLang: muziekDuur / rest > MAX };
+}
+export async function diashow(fotos, muziek, uit, tmp) {
+  const lengtes = []; for (const m of muziek) lengtes.push(await duur(m));
+  const muziekDuur = lengtes.reduce((a, b) => a + b, 0);
+  const p = diashowPlan(fotos.length, muziekDuur);
+  if (!p || !muziekDuur) throw new Error('Te weinig foto\'s of geen muziek');
+  const n = fotos.length, args = ['-y', '-v', 'error'];
+  fotos.forEach((f, i) => args.push('-loop', '1', '-framerate', '25', '-t', String(p.duren[i] + (i < n - 1 ? OVER : 0)), '-i', f));
+  muziek.forEach((m) => args.push('-i', m));
+  const g = [];
+  fotos.forEach((f, i) => {
+    let v = `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
+    if (i === n - 1) { const d = p.duren[i], a = Math.max(0, d - 4.5); v += `,hue=s='max(0,1-(t-${a.toFixed(2)})/2)',fade=t=out:st=${Math.max(0, d - 1.5).toFixed(2)}:d=1.5`; }
+    if (i === 0) v += ',fade=t=in:st=0:d=1';
+    g.push(v + `[v${i}]`);
+  });
+  let laatste = 'v0', offset = 0;
+  for (let i = 1; i < n; i++) {
+    offset += p.duren[i - 1];
+    g.push(`[${laatste}][v${i}]xfade=transition=fade:duration=${OVER}:offset=${offset.toFixed(3)}[x${i}]`);
+    laatste = 'x' + i;
+  }
+  const a = muziek.map((_, k) => `[${n + k}:a]`).join('');
+  g.push(`${a}concat=n=${muziek.length}:v=0:a=1,aresample=48000,adelay=${KOP * 1000}:all=1,apad,atrim=0:${p.totaal.toFixed(3)},afade=t=out:st=${Math.max(0, p.totaal - 3).toFixed(3)}:d=3[a]`);
+  const script = path.join(tmp, 'diashow-' + crypto.randomBytes(4).toString('hex') + '.txt');
+  await fs.writeFile(script, g.join(';\n'));
+  try {
+    await run('ffmpeg', [...args, '-filter_complex_script', script, '-map', `[${laatste}]`, '-map', '[a]', '-t', p.totaal.toFixed(3),
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-r', '25', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', uit], { maxBuffer: 1e8 });
+  } finally { await fs.rm(script, { force: true }); }
+  return p;
+}
+
 // Opnamedatum. Gefotografeerde afdrukken (AFDRUK) en datums van de laatste 7 dagen (behalve in 'Later') tellen niet.
 async function datum(f, bestand, fase) {
   if (/AFDRUK/.test(f.name)) return 0;
@@ -161,7 +208,7 @@ async function pool(items, n, fn) {
 // ---------- De opdracht ----------
 // Eén film: de vakken van die film ophalen, op volgorde zetten, omzetten en in zijn diashowmap zetten.
 // zipMap: als die er is, blijven de omgezette bestanden (en de muziek) daar staan voor de zip van deze film.
-async function verwerkFilm(d, tmp, film, fouten, zipMap, opdrachtNaam) {
+async function verwerkFilm(d, tmp, film, fouten, zipMap, opdrachtNaam, wilDiashow) {
   let aantal = 0;
   const MAP = 'application/vnd.google-apps.folder';
   for (const f of await d.lijst(film.diashow)) if (f.mimeType !== MAP) await d.weg(f.id); // opnieuw proberen: map eerst leeg
@@ -226,7 +273,23 @@ async function verwerkFilm(d, tmp, film, fouten, zipMap, opdrachtNaam) {
     try { await d.zet(film.diashow, 'Muziek – lees dit.txt', 'text/plain', p); } catch (e) {}
     if (!zipMap) await fs.rm(p, { force: true });
   }
-  return aantal;
+  // 5. Optie: kant-en-klare diashow op de muziek (alleen met een muziekbestand; anders maakt Daan hem met de hand).
+  let ds;
+  if (wilDiashow && zipMap) {
+    const inMap = (await fs.readdir(zipMap)).sort((a, b) => a.localeCompare(b, 'nl', { numeric: true }));
+    const fotos = inMap.filter((x) => /^\d{3} .*\.jpg$/.test(x)).map((x) => path.join(zipMap, x));
+    const audio = inMap.filter((x) => /^muziek \d+ - /.test(x)).map((x) => path.join(zipMap, x));
+    if (!audio.length) ds = { nr: film.nr || 1, status: 'geen muziek', muziek: regels };
+    else if (fotos.length < 2) ds = { nr: film.nr || 1, status: 'te weinig foto\'s' };
+    else try {
+      const naam = 'Diashow' + (film.naam ? ' – ' + film.naam.replace(/[\/\\:*?"<>|]/g, ' ') : '') + '.mp4';
+      const uit = path.join(zipMap, naam);
+      const p = await diashow(fotos, audio, uit, tmp);
+      try { await d.zet(film.diashow, naam, 'video/mp4', uit); } catch (e) { console.error('Diashow naar Drive', e.message); }
+      ds = { nr: film.nr || 1, status: 'ok', duur: Math.round(p.totaal), perFoto: Math.round(p.perFoto * 10) / 10, teKort: p.teKort, teLang: p.teLang };
+    } catch (e) { console.error('Diashow mislukt', film.nr, e.message); ds = { nr: film.nr || 1, status: 'mislukt' }; }
+  }
+  return { aantal, ds };
 }
 
 // Meerdere films (familie, vrienden, werk): o.films = [{ nr, naam, map, fases, diashow }]. Oude opdrachten: één film.
@@ -236,7 +299,7 @@ export async function verwerk(o) {
   const fouten = [];
   let aantal = 0;
   const films = Array.isArray(o.films) && o.films.length ? o.films : [{ nr: 1, map: o.klant, fases: o.fases, diashow: o.diashow }];
-  const zips = [];
+  const zips = [], diashows = [];
   try {
     if (films.length > 1) for (const f of await d.lijst(o.diashow)) if (f.mimeType !== 'application/vnd.google-apps.folder') await d.weg(f.id); // resten van een eerdere enkele film
     if (o.downloads) for (const f of await d.lijst(o.downloads)) await d.weg(f.id); // oude zips weg
@@ -246,7 +309,8 @@ export async function verwerk(o) {
       const veilig = label.replace(/[\/\\:*?"<>|]/g, ' ').trim();
       const zipMap = o.downloads ? path.join(tmp, 'zip-' + (film.nr || 1), veilig) : null;
       if (zipMap) await fs.mkdir(zipMap, { recursive: true });
-      aantal += await verwerkFilm(d, tmp, film, fouten, zipMap, o.naam);
+      const r = await verwerkFilm(d, tmp, film, fouten, zipMap, o.naam, !!o.diashow);
+      aantal += r.aantal; if (r.ds) diashows.push(r.ds);
       if (!zipMap) continue;
       try {
         const zipNaam = ((o.naam ? o.naam + ' – ' : '') + veilig).replace(/[\/\\:*?"<>|]/g, ' ').trim() + '.zip';
@@ -269,8 +333,8 @@ export async function verwerk(o) {
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
-  const r = await fetch(o.terug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actie: 'omgezet', job: o.job, aantal, fouten, zips }) });
-  console.log('Klaar', o.code, films.length, 'film(s),', aantal, 'omgezet,', fouten.length, 'fouten, terugmelding', r.status);
+  const r = await fetch(o.terug, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actie: 'omgezet', job: o.job, aantal, fouten, zips, diashows }) });
+  console.log('Klaar', o.code, films.length, 'film(s),', aantal, 'omgezet,', fouten.length, 'fouten,', diashows.length, 'diashow(s), terugmelding', r.status);
 }
 
 // ---------- Webserver ----------

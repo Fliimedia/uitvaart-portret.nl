@@ -32,6 +32,7 @@
   .knop:disabled { opacity:.45; cursor:default; }
   .rij { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
   label.akkoord { display:flex; gap:12px; align-items:flex-start; margin:14px 0 18px; font-size:15px; }
+  label.optie { padding:14px 16px; border-radius:14px; background:#EFE9DF; }
   label.akkoord input { width:22px; height:22px; margin:2px 0 0; flex-shrink:0; accent-color:var(--green); }
   .fout { color:#8A3B2E; }
   .hidden { display:none !important; }
@@ -85,6 +86,7 @@
         <li>met de muziek erbij, klaar om in één keer in PowerPoint, Photostage of een ander programma te slepen.</li>
       </ul>
       <p class="muted">Na het afronden kan niemand meer foto’s toevoegen. Vraag de familie dus eerst of iedereen klaar is.</p>
+      <label class="akkoord optie"><input type="checkbox" id="ds-optie"> <span><strong>Ook een kant-en-klare diashow (mp4), <span id="ds-prijs">+€10</span></strong><br>Eerst de portretfoto, dan alle foto’s op volgorde op de muziek, met zachte overgangen. Klaar om af te spelen of in het systeem van de locatie te zetten. <span id="ds-noot" class="muted"></span></span></label>
       <label class="akkoord"><input type="checkbox" id="akkoord"> <span>Ik ga akkoord met de <a href="algemene-voorwaarden.html" target="_blank">algemene voorwaarden</a> en wil dat de bestanden direct worden omgezet. Ik begrijp dat mijn herroepingsrecht vervalt zodra de download is geleverd.</span></label>
       <button type="button" class="knop" id="betaal" disabled>Iedereen is klaar: afronden en betalen</button>
       <p class="fout" id="fout" style="margin-top:12px"></p>
@@ -130,6 +132,11 @@
     // Let op: bij een partner vervangt toon() de zin met #prijs; bij een tweede keer (na afronden of Vernieuwen) bestaat hij dan niet meer.
     if ($('prijs')) $('prijs').textContent = prijs + (meer && !j.partner ? ` (${j.films.length} films: €39 + €12,99 per extra film)` : '');
     $('zelf-upload').href = j.uploadlink;
+    // Optie diashow: +€10 per film (partner: excl. btw, op de factuur). Zonder muziekbestand maakt Daan hem met de hand.
+    const ds = $('ds-optie').checked, dsBedrag = ds ? (j.diashowPrijs || 0) : 0;
+    $('ds-prijs').textContent = '+' + (j.diashowTekst || '€10') + (j.partner ? ' excl. btw, op de factuur' : '') + (meer ? ` (€10 per film)` : '');
+    $('ds-noot').textContent = j.muziekBestanden ? '' : 'Er is nog geen muziekbestand (mp3) toegevoegd. Dan maak ik hem met de hand, met de muziek die is opgegeven.';
+    const totaal = (j.prijs || 0) + (j.partner ? 0 : dsBedrag), totaalTekst = '€' + (Number.isInteger(totaal) ? totaal : totaal.toFixed(2).replace('.', ','));
     let f = 0, v = 0;
     // Meerdere films (bijv. familie, vrienden, werk): per film een kop met totaal, de periodes en de muziek.
     const uitleg = $('films-uitleg');
@@ -167,7 +174,7 @@
       $('betaal').textContent = f + v === 0 ? 'Nog niets binnen' : 'Iedereen is klaar: afronden';
     } else {
       $('betaal').disabled = !$('akkoord').checked || f + v === 0;
-      $('betaal').textContent = f + v === 0 ? 'Nog niets binnen' : `Iedereen is klaar: afronden en betalen (${prijs})`;
+      $('betaal').textContent = f + v === 0 ? 'Nog niets binnen' : `Iedereen is klaar: afronden en betalen (${totaalTekst})`;
     }
     const t = encodeURIComponent('Hallo Daan, wil jij de film maken? Mijn verzamellink: ' + c);
     $('wa').href = 'https://wa.me/31618424858?text=' + t; $('ml').href = 'mailto:info@uitvaart-portret.nl?subject=Film%20laten%20maken&body=' + t;
@@ -184,6 +191,7 @@
   }
   if (!c || !b) { $('laden').classList.add('hidden'); $('ongeldig').classList.remove('hidden'); return; }
   $('akkoord').onchange = () => info && toon(info);
+  $('ds-optie').onchange = () => info && toon(info);
   $('ververs').onclick = laad;
   $('meekijk').onclick = () => {
     if (!info) return;
@@ -202,7 +210,7 @@
   $('betaal').onclick = () => {
     if (!confirm('Is iedereen klaar? Na het afronden kan niemand meer foto’s toevoegen.')) return;
     $('betaal').disabled = true; $('fout').textContent = '';
-    post({ actie: 'afsluiten', c, b, akkoord: true }).then((j) => {
+    post({ actie: 'afsluiten', c, b, akkoord: true, diashow: $('ds-optie').checked }).then((j) => {
       if (j.checkout) location.href = j.checkout; else laad();
     }).catch((e) => { $('fout').textContent = (e && e.error) || 'Dat lukte niet. Probeer het opnieuw.'; $('betaal').disabled = false; });
   };
